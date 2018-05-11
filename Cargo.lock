@@ -1,0 +1,4 @@
+[[package]]
+name = "nmea-gga-sentence-reader"
+version = "0.1.0"
+
