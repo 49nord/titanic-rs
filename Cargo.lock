@@ -9,16 +9,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "libc"
-version = "0.2.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "nmea-gga-sentence-reader"
+name = "gps-parser"
 version = "0.1.0"
 dependencies = [
  "chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "libc"
+version = "0.2.40"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "num-integer"

@@ -62,7 +62,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
             None => return None,
             Some(c) if c.is_ascii_digit() || c == b'-' => {
                 let sign = if c == b'-' {
-                    self.advance(); // FIXME: we need a try_some! here
+                    try_some!(self.advance()); // FIXME: we need a try_some! here
                     -1
                 } else {
                     1
