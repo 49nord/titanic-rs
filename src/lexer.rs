@@ -4,7 +4,7 @@ use std::str::{self, FromStr};
 use std::{io, num};
 
 const HEADER_LENGTH: usize = 2;
-const FLOAT_LENGTH: usize = 16;
+const FLOAT_LENGTH: usize = 32;
 
 quick_error!{
     #[derive(Debug)]
@@ -122,7 +122,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 unimplemented!();
             }
             Some(c) if c.is_ascii_digit() || c == b'-' => {
-                let mut buf = ArrayVec::<[u8; 16]>::new();
+                let mut buf = ArrayVec::<[u8; FLOAT_LENGTH]>::new();
                 if c == b'-' {
                     if let Err(e) = buf.try_push(c) {
                         return Some(Err(e.into()));
@@ -165,7 +165,6 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                             try_some!(self.advance());
                         }
                         return Some(Ok(Token::new(TokenKind::FloatLiteral(buf))));
-                        // TODO: return a FloatLiteral
                     }
                 }
                 // we got an integer
@@ -176,6 +175,10 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     Err(e) => return Some(Err(e.into())),
                 };
                 Some(Ok(Token::new(TokenKind::IntLiteral(int))))
+            }
+            Some(c) if c == b',' => {
+                try_some!(self.advance());
+                Some(Ok(Token::new(TokenKind::CommaSeperator)))
             }
             _ => unimplemented!(),
         }
