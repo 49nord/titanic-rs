@@ -5,3 +5,4 @@ authors = ["Carl Scherer <carl.scherer@49nord.de>"]
 
 [dependencies]
 quick-error = "1.2.1"
+arrayvec = "0.4.7"

@@ -1,7 +1,10 @@
-use std::{io, num};
+use arrayvec::{ArrayVec, CapacityError};
+
 use std::str::{self, FromStr};
+use std::{io, num};
 
 const HEADER_LENGTH: usize = 2;
+const FLOAT_LENGTH: usize = 16;
 
 quick_error!{
     #[derive(Debug)]
@@ -17,7 +20,7 @@ quick_error!{
         }
         Io(err: io::Error) {
             from()
-            description("I/O error")
+            description(err.description())
             display("Encountered I/O error while lexing: {}", err)
             cause(err)
         }
@@ -29,6 +32,12 @@ quick_error!{
         IncompleteNumber {
             description("Incomplete number")
             display("Encountered incomplete number")
+        }
+        NumberTooLong(err: CapacityError<u8>) {
+            from()
+            description(err.description())
+            display("Encountered a number longer than {} characters", FLOAT_LENGTH)
+            cause(err)
         }
         Int(err: num::ParseIntError) {
             from()
@@ -43,7 +52,7 @@ pub enum TokenKind {
     Header([u8; HEADER_LENGTH]),
     StringLiteral(String),
     CommaSeperator,
-    FloatLiteral(Vec<u8>),
+    FloatLiteral(ArrayVec<[u8; FLOAT_LENGTH]>),
     IntLiteral(i64),
     ValidChecksum(u8),
     LineEnding,
@@ -113,9 +122,11 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 unimplemented!();
             }
             Some(c) if c.is_ascii_digit() || c == b'-' => {
-                let mut buf = Vec::new();
+                let mut buf = ArrayVec::<[u8; 16]>::new();
                 if c == b'-' {
-                    buf.push(c);
+                    if let Err(e) = buf.try_push(c) {
+                        return Some(Err(e.into()));
+                    }
                     try_some!(self.advance());
                     if let Some(d) = self.peek_buf {
                         if !d.is_ascii_digit() {
@@ -129,14 +140,18 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     if !d.is_ascii_digit() {
                         break;
                     }
-                    buf.push(d);
+                    if let Err(e) = buf.try_push(c) {
+                        return Some(Err(e.into()));
+                    }
                     try_some!(self.advance());
                 }
 
                 if let Some(c) = self.peek_buf {
                     if c == b'.' {
                         // we got a decimal dot!
-                        buf.push(c);
+                        if let Err(e) = buf.try_push(c) {
+                            return Some(Err(e.into()));
+                        }
                         try_some!(self.advance());
 
                         // read another integer literal
@@ -144,10 +159,13 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                             if !d.is_ascii_digit() {
                                 break;
                             }
-                            buf.push(d);
+                            if let Err(e) = buf.try_push(c) {
+                                return Some(Err(e.into()));
+                            }
                             try_some!(self.advance());
                         }
-
+                        return Some(Ok(Token::new(TokenKind::FloatLiteral(buf))));
+                        // TODO: return a FloatLiteral
                     }
                 }
                 // we got an integer
@@ -159,7 +177,6 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 };
                 Some(Ok(Token::new(TokenKind::IntLiteral(int))))
             }
-            // Some(c) if c.is
             _ => unimplemented!(),
         }
     }
