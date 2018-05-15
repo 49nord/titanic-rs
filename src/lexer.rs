@@ -205,7 +205,17 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 try_some!(self.advance());
                 Some(Ok(Token::new(TokenKind::CommaSeperator)))
             }
-            _ => unimplemented!(),
+            Some(c) if c == b'\r' || c == b'\n' => {
+                while let Some(nl) = self.peek_buf {
+                    if nl != b'\r' && nl != b'\n' {
+                        break;
+                    }
+                    try_some!(self.advance());
+                }
+                self.cur_checksum = 0;
+                Some(Ok(Token::new(TokenKind::LineEnding)))
+            }
+            Some(c) => return Some(Err(c.into())),
         }
     }
 }
