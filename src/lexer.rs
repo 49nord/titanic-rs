@@ -63,7 +63,7 @@ impl From<(u8, u8)> for Error {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenKind {
     Header([u8; HEADER_LENGTH]),
     StringLiteral(ArrayVec<[u8; STRING_LENGTH]>),
@@ -74,7 +74,7 @@ pub enum TokenKind {
     LineEnding,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     kind: TokenKind,
 }
@@ -259,4 +259,153 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
             Some(c) => return Some(Err(c.into())),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Token, TokenKind, Tokenizer, NUMBER_LENGTH, STRING_LENGTH};
+    use arrayvec::ArrayVec;
+    use std::io::Cursor;
+
+    fn t_lexer(arg: &str) -> Tokenizer<Cursor<&str>> {
+        Tokenizer::new(Cursor::new(arg)).unwrap()
+    }
+
+    fn str_array_vec(vec: Vec<u8>) -> ArrayVec<[u8; STRING_LENGTH]> {
+        let mut av = ArrayVec::<[u8; STRING_LENGTH]>::new();
+        for v in vec {
+            av.push(v);
+        }
+        av
+    }
+
+    fn float_array_vec(vec: Vec<u8>) -> ArrayVec<[u8; NUMBER_LENGTH]> {
+        let mut av = ArrayVec::<[u8; NUMBER_LENGTH]>::new();
+        for v in vec {
+            av.push(v);
+        }
+        av
+    }
+
+    #[test]
+    fn check_empty() {
+        let mut lexer = t_lexer("");
+        assert!(lexer.next().is_none());
+    }
+
+    #[test]
+    fn check_header() {
+        let mut lexer = t_lexer("$GG");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Header([b'G'; 2]))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("$");
+        assert!(lexer.next().unwrap().is_err());
+
+        let mut lexer = t_lexer("$G");
+        assert!(lexer.next().unwrap().is_err());
+    }
+
+    #[test]
+    fn check_string() {
+        let mut lexer = t_lexer("arg");
+        let expected = str_array_vec(vec![b'a', b'r', b'g']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::StringLiteral(expected.clone()))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("arg.");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::StringLiteral(expected))
+        );
+        assert!(lexer.next().is_some());
+    }
+
+    #[test]
+    fn check_int() {
+        let mut lexer = t_lexer("1234");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::IntLiteral(1234))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("-1234");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::IntLiteral(-1234))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("1234a");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::IntLiteral(1234))
+        );
+        assert!(lexer.next().is_some());
+    }
+
+    #[test]
+    fn check_float() {
+        let mut lexer = t_lexer("1.23");
+        let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::FloatLiteral(expected))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("-1.23");
+        let expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::FloatLiteral(expected))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("-123.");
+        let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::FloatLiteral(expected))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("1.23a");
+        let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::FloatLiteral(expected))
+        );
+        assert!(lexer.next().is_some());
+
+        let mut lexer = t_lexer("-123.a");
+        let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::FloatLiteral(expected))
+        );
+        assert!(lexer.next().is_some());
+    }
+
+    #[test]
+    fn check_comma() {
+        let mut lexer = t_lexer(",");
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer(",a");
+        assert_eq!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
+        assert_ne!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
+    }
+
+    // TODO: Test new line
+    // TODO: Test Checksum
+    // TODO: Test more complex case (NMEA sentence)
 }
