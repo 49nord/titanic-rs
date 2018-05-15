@@ -3,9 +3,11 @@ use arrayvec::{ArrayVec, CapacityError};
 use std::str::{self, FromStr};
 use std::{io, num};
 
+const CHECKSUM_LENGTH: usize = 2;
 const HEADER_LENGTH: usize = 2;
 const NUMBER_LENGTH: usize = 32;
 const STRING_LENGTH: usize = 64;
+const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
 
 quick_error!{
     #[derive(Debug)]
@@ -86,6 +88,7 @@ impl Token {
 pub struct Tokenizer<R> {
     input: io::Bytes<R>,
     peek_buf: Option<u8>,
+    cur_checksum: u8,
 }
 
 impl<R: io::Read> Tokenizer<R> {
@@ -93,6 +96,7 @@ impl<R: io::Read> Tokenizer<R> {
         let mut tk = Tokenizer {
             input: input.bytes(),
             peek_buf: None,
+            cur_checksum: 0,
         };
 
         tk.advance()?;
@@ -102,6 +106,14 @@ impl<R: io::Read> Tokenizer<R> {
 
     pub fn advance(&mut self) -> Result<Option<u8>, io::Error> {
         let prev = self.peek_buf;
+
+        if let Some(c) = prev {
+            // Excluded chars can be found
+            // [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
+            if !EXCLUDED_CHARS.contains(&c) {
+                self.cur_checksum ^= c;
+            }
+        }
 
         self.peek_buf = match self.input.next() {
             None => None,
@@ -214,6 +226,35 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 }
                 self.cur_checksum = 0;
                 Some(Ok(Token::new(TokenKind::LineEnding)))
+            }
+            Some(c) if c == b'*' => {
+                let actual_sum = self.cur_checksum;
+                let mut buf = ArrayVec::<[u8; CHECKSUM_LENGTH]>::new();
+
+                try_some!(self.advance());
+
+                for _ in 0..CHECKSUM_LENGTH {
+                    match self.peek_buf {
+                        None => return Some(Err("Checksum".into())),
+                        Some(h) if h.is_ascii_hexdigit() => {
+                            if let Err(e) = buf.try_push(h) {
+                                return Some(Err((e, buf.capacity()).into()));
+                            }
+                        }
+                        Some(_) => return Some(Err(Error::IncompleteToken("Checksum"))),
+                    }
+                    try_some!(self.advance());
+                }
+
+                // we know only ascii hexdigits are in buf
+                let expected_sum = match u8::from_str_radix(str::from_utf8(&buf).unwrap(), 16) {
+                    Ok(i) => i,
+                    Err(e) => return Some(Err(e.into())),
+                };
+                if !(expected_sum ^ actual_sum == 0) {
+                    return Some(Err((expected_sum, actual_sum).into()));
+                }
+                Some(Ok(Token::new(TokenKind::Checksum(actual_sum))))
             }
             Some(c) => return Some(Err(c.into())),
         }
