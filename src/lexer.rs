@@ -5,6 +5,7 @@ use std::{io, num};
 
 const HEADER_LENGTH: usize = 2;
 const FLOAT_LENGTH: usize = 32;
+const STRING_LENGTH: usize = 64;
 
 quick_error!{
     #[derive(Debug)]
@@ -33,10 +34,9 @@ quick_error!{
             description("Incomplete number")
             display("Encountered incomplete number")
         }
-        NumberTooLong(err: CapacityError<u8>) {
-            from()
+        ArrayOverflow(err: CapacityError<u8>, capacity: usize) {
             description(err.description())
-            display("Encountered a number longer than {} characters", FLOAT_LENGTH)
+            display("Tried to push more than {} characters into the buffer: {}", capacity, err)
             cause(err)
         }
         Int(err: num::ParseIntError) {
@@ -48,9 +48,16 @@ quick_error!{
     }
 }
 
+// Quick error can't handle from for tuples
+impl From<(CapacityError<u8>, usize)> for Error {
+    fn from((e, cap): (CapacityError<u8>, usize)) -> Self {
+        Error::ArrayOverflow(e, cap)
+    }
+}
+
 pub enum TokenKind {
     Header([u8; HEADER_LENGTH]),
-    StringLiteral(String),
+    StringLiteral(ArrayVec<[u8; STRING_LENGTH]>),
     CommaSeperator,
     FloatLiteral(ArrayVec<[u8; FLOAT_LENGTH]>),
     IntLiteral(i64),
@@ -119,13 +126,23 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 return Some(Ok(Token::new(TokenKind::Header(header))));
             }
             Some(c) if c.is_ascii_alphabetic() => {
-                unimplemented!();
+                let mut buf = ArrayVec::<[u8; STRING_LENGTH]>::new();
+                while let Some(a) = self.peek_buf {
+                    if !a.is_ascii_alphabetic() {
+                        break;
+                    }
+                    if let Err(e) = buf.try_push(a) {
+                        return Some(Err((e, buf.capacity()).into()));
+                    }
+                    try_some!(self.advance());
+                }
+                return Some(Ok(Token::new(TokenKind::StringLiteral(buf))));
             }
             Some(c) if c.is_ascii_digit() || c == b'-' => {
                 let mut buf = ArrayVec::<[u8; FLOAT_LENGTH]>::new();
                 if c == b'-' {
                     if let Err(e) = buf.try_push(c) {
-                        return Some(Err(e.into()));
+                        return Some(Err((e, buf.capacity()).into()));
                     }
                     try_some!(self.advance());
                     if let Some(d) = self.peek_buf {
@@ -141,7 +158,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                         break;
                     }
                     if let Err(e) = buf.try_push(c) {
-                        return Some(Err(e.into()));
+                        return Some(Err((e, buf.capacity()).into()));
                     }
                     try_some!(self.advance());
                 }
@@ -150,7 +167,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     if c == b'.' {
                         // we got a decimal dot!
                         if let Err(e) = buf.try_push(c) {
-                            return Some(Err(e.into()));
+                            return Some(Err((e, buf.capacity()).into()));
                         }
                         try_some!(self.advance());
 
@@ -160,7 +177,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                                 break;
                             }
                             if let Err(e) = buf.try_push(c) {
-                                return Some(Err(e.into()));
+                                return Some(Err((e, buf.capacity()).into()));
                             }
                             try_some!(self.advance());
                         }
