@@ -4,7 +4,7 @@ use std::str::{self, FromStr};
 use std::{io, num};
 
 const HEADER_LENGTH: usize = 2;
-const FLOAT_LENGTH: usize = 32;
+const NUMBER_LENGTH: usize = 32;
 const STRING_LENGTH: usize = 64;
 
 quick_error!{
@@ -30,9 +30,9 @@ quick_error!{
             description("Unexpected EOF")
             display("Encountered unexpected EOF in {}", token)
         }
-        IncompleteNumber {
-            description("Incomplete number")
-            display("Encountered incomplete number")
+        IncompleteToken(token: &'static str) {
+            description("Incomplete token")
+            display("Could not complete token of type {}", token)
         }
         ArrayOverflow(err: CapacityError<u8>, capacity: usize) {
             description(err.description())
@@ -55,16 +55,24 @@ impl From<(CapacityError<u8>, usize)> for Error {
     }
 }
 
+impl From<(u8, u8)> for Error {
+    fn from((expected, actual): (u8, u8)) -> Self {
+        Error::InvalidChecksum(expected, actual)
+    }
+}
+
+#[derive(Debug)]
 pub enum TokenKind {
     Header([u8; HEADER_LENGTH]),
     StringLiteral(ArrayVec<[u8; STRING_LENGTH]>),
     CommaSeperator,
-    FloatLiteral(ArrayVec<[u8; FLOAT_LENGTH]>),
+    FloatLiteral(ArrayVec<[u8; NUMBER_LENGTH]>),
     IntLiteral(i64),
-    ValidChecksum(u8),
+    Checksum(u8),
     LineEnding,
 }
 
+#[derive(Debug)]
 pub struct Token {
     kind: TokenKind,
 }
@@ -119,7 +127,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 let mut header = [0u8; HEADER_LENGTH];
                 for i in 0..HEADER_LENGTH {
                     match try_some!(self.advance()) {
-                        None => return Some(Err(Error::UnexpectedEof("Header"))),
+                        None => return Some(Err("Header".into())),
                         Some(c) => header[i] = c,
                     }
                 }
@@ -139,7 +147,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 return Some(Ok(Token::new(TokenKind::StringLiteral(buf))));
             }
             Some(c) if c.is_ascii_digit() || c == b'-' => {
-                let mut buf = ArrayVec::<[u8; FLOAT_LENGTH]>::new();
+                let mut buf = ArrayVec::<[u8; NUMBER_LENGTH]>::new();
                 if c == b'-' {
                     if let Err(e) = buf.try_push(c) {
                         return Some(Err((e, buf.capacity()).into()));
@@ -147,7 +155,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     try_some!(self.advance());
                     if let Some(d) = self.peek_buf {
                         if !d.is_ascii_digit() {
-                            return Some(Err(Error::IncompleteNumber));
+                            return Some(Err(Error::IncompleteToken("Number")));
                         }
                     }
                 }
@@ -157,7 +165,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     if !d.is_ascii_digit() {
                         break;
                     }
-                    if let Err(e) = buf.try_push(c) {
+                    if let Err(e) = buf.try_push(d) {
                         return Some(Err((e, buf.capacity()).into()));
                     }
                     try_some!(self.advance());
@@ -176,7 +184,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                             if !d.is_ascii_digit() {
                                 break;
                             }
-                            if let Err(e) = buf.try_push(c) {
+                            if let Err(e) = buf.try_push(d) {
                                 return Some(Err((e, buf.capacity()).into()));
                             }
                             try_some!(self.advance());
