@@ -265,7 +265,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
+    use super::{Error, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
     use arrayvec::ArrayVec;
     use std::io::Cursor;
 
@@ -295,217 +295,431 @@ mod tests {
         assert!(lexer.next().is_none());
     }
 
-    #[test]
-    fn check_header() {
-        let mut lexer = t_lexer("$GG");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Header([b'G'; 2]))
-        );
-        assert!(lexer.next().is_none());
+    mod header {
+        use super::{t_lexer, Token, TokenKind};
 
-        let mut lexer = t_lexer("$");
-        assert!(lexer.next().unwrap().is_err());
+        #[test]
+        fn header_ok() {
+            let mut lexer = t_lexer("$GG");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Header([b'G', b'G'])
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("$G");
-        assert!(lexer.next().unwrap().is_err());
+        #[test]
+        fn only_dollar() {
+            let mut lexer = t_lexer("$");
+            assert!(lexer.next().unwrap().is_err());
+        }
+
+        #[test]
+        fn dollar_plus_char() {
+            let mut lexer = t_lexer("$G");
+            assert!(lexer.next().unwrap().is_err());
+        }
     }
 
-    #[test]
-    fn check_string() {
-        let mut lexer = t_lexer("arg");
-        let expected = str_array_vec(vec![b'a', b'r', b'g']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::StringLiteral(expected.clone()))
-        );
-        assert!(lexer.next().is_none());
+    mod string_lit {
+        use super::{str_array_vec, t_lexer, Token, TokenKind};
 
-        let mut lexer = t_lexer("arg.");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::StringLiteral(expected))
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn string_ok() {
+            let _expected = str_array_vec(vec![b'a', b'r', b'g']);
+            let mut lexer = t_lexer("arg");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::StringLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
+
+        #[test]
+        fn stops_correctly() {
+            let _expected = str_array_vec(vec![b'a', b'r', b'g']);
+            let mut lexer = t_lexer("arg.");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::StringLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
     }
 
-    #[test]
-    fn check_int() {
-        let mut lexer = t_lexer("1234");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::IntLiteral(1234))
-        );
-        assert!(lexer.next().is_none());
+    mod int {
+        use super::{t_lexer, Token, TokenKind};
 
-        let mut lexer = t_lexer("-1234");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::IntLiteral(-1234))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn check_int() {
+            let mut lexer = t_lexer("1234");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::IntLiteral(1234)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("1234a");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::IntLiteral(1234))
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn negative_int() {
+            let mut lexer = t_lexer("-1234");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::IntLiteral(-1234)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
+
+        #[test]
+        fn stops_correctly() {
+            let mut lexer = t_lexer("1234a");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::IntLiteral(1234)
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
     }
 
-    #[test]
-    fn check_float() {
-        let mut lexer = t_lexer("1.23");
-        let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::FloatLiteral(expected))
-        );
-        assert!(lexer.next().is_none());
+    mod float {
+        use super::{float_array_vec, t_lexer, Token, TokenKind};
 
-        let mut lexer = t_lexer("-1.23");
-        let expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::FloatLiteral(expected))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn positive_float() {
+            let mut lexer = t_lexer("1.23");
+            let _expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::FloatLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("-123.");
-        let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::FloatLiteral(expected))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn negative_float() {
+            let mut lexer = t_lexer("-1.23");
+            let _expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::FloatLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("1.23a");
-        let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::FloatLiteral(expected))
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn end_with_dot() {
+            let mut lexer = t_lexer("-123.");
+            let _expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::FloatLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("-123.a");
-        let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::FloatLiteral(expected))
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn stops_correctly() {
+            let mut lexer = t_lexer("1.23a");
+            let _expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::FloatLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
+
+        #[test]
+        fn negative_correct_stop_at_dot() {
+            let mut lexer = t_lexer("-123.a");
+            let _expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::FloatLiteral(_expected)
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
     }
 
-    #[test]
-    fn check_comma() {
-        let mut lexer = t_lexer(",");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::CommaSeperator)
-        );
-        assert!(lexer.next().is_none());
+    mod comma {
+        use super::{t_lexer, Token, TokenKind};
+        #[test]
+        fn just_comma() {
+            let mut lexer = t_lexer(",");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::CommaSeperator
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer(",a");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::CommaSeperator)
-        );
-        assert_ne!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::CommaSeperator)
-        );
+        #[test]
+        fn stops_correctly() {
+            let mut lexer = t_lexer(",a");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::CommaSeperator
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
     }
 
-    #[test]
-    fn check_new_line() {
-        let mut lexer = t_lexer("\n");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::LineEnding)
-        );
-        assert!(lexer.next().is_none());
+    mod new_line {
+        use super::{t_lexer, Token, TokenKind};
 
-        let mut lexer = t_lexer("\r");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::LineEnding)
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn lf() {
+            let mut lexer = t_lexer("\n");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::LineEnding
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
+        #[test]
+        fn cr() {
+            let mut lexer = t_lexer("\r");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::LineEnding
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("\r\n");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::LineEnding)
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn crlf() {
+            let mut lexer = t_lexer("\r\n");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::LineEnding
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("\n\r\n\n\r");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::LineEnding)
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn multiple_new_line() {
+            let mut lexer = t_lexer("\n\r\n\n\r");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::LineEnding
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("\r\na");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::LineEnding)
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn stops_correctly() {
+            let mut lexer = t_lexer("\r\na");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::LineEnding
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
     }
 
-    #[test]
-    fn check_checksum() {
-        let mut lexer = t_lexer("*00");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Checksum(0))
-        );
-        assert!(lexer.next().is_none());
+    mod checksum {
+        use super::{t_lexer, Token, TokenKind, EXCLUDED_CHARS};
 
-        let mut lexer = t_lexer("*0");
-        assert!(lexer.next().unwrap().is_err());
-        assert!(lexer.next().is_none());
+        #[test]
+        fn empty_message() {
+            let mut lexer = t_lexer("*00");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Checksum(0)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("*");
-        assert!(lexer.next().unwrap().is_err());
-        assert!(lexer.next().is_none());
+        #[test]
+        fn only_one_hex() {
+            let mut lexer = t_lexer("*0");
+            assert!(lexer.next().unwrap().is_err());
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("*00\n");
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Checksum(0))
-        );
-        assert!(lexer.next().is_some());
+        #[test]
+        fn only_asterisk() {
+            let mut lexer = t_lexer("*");
+            assert!(lexer.next().unwrap().is_err());
+            assert!(lexer.next().is_none());
+        }
 
-        let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+        #[test]
+        fn stops_correctly() {
+            let mut lexer = t_lexer("*00\n");
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Checksum(0)
+                }))
+            );
+            assert!(lexer.next().is_some());
+        }
 
-        let mut lexer = t_lexer("test*16").skip(1);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Checksum(expected))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn with_message() {
+            let _expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+            let mut lexer = t_lexer("test*16").skip(1);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Checksum(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let mut lexer = t_lexer("$test*16").skip(2);
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Checksum(expected))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn reset_at_dollar() {
+            let _expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+            let mut lexer = t_lexer("ab$test*16").skip(3);
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Checksum(_expected)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
 
-        let ex_chars = EXCLUDED_CHARS
-            .iter()
-            .map(|&b| b as char)
-            .collect::<String>();
-        let input = format!("{}*00", ex_chars);
-        let mut lexer = t_lexer(&input).skip(3);
-        // This test depends on the ordering of EXCLUDED_CHARS
-        assert_eq!(
-            lexer.next().unwrap().unwrap(),
-            Token::new(TokenKind::Checksum(0))
-        );
-        assert!(lexer.next().is_none());
+        #[test]
+        fn exclude_chars() {
+            let ex_chars = EXCLUDED_CHARS
+                .iter()
+                .map(|&b| b as char)
+                .collect::<String>();
+            let input = format!("{}*00", ex_chars);
+            let mut lexer = t_lexer(&input).skip(3);
+            // This test depends on the ordering of EXCLUDED_CHARS
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::Checksum(0)
+                }))
+            );
+            assert!(lexer.next().is_none());
+        }
     }
+
     // TODO: Test more complex case (NMEA sentence)
+    mod nmea {
+        use super::{float_array_vec, str_array_vec, t_lexer, Error, Token, TokenKind};
+
+        const CORRECT_WO_LOCATION: &str = "$GPGGA,142013.087,,,,,0,0,,,M,,M,,*42";
+
+        #[test]
+        fn correct_wo_location() {
+            let mut lexer = t_lexer(CORRECT_WO_LOCATION);
+            let _header = Token::new(TokenKind::Header([b'G', b'P']));
+            let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
+            let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
+            let _comma = Token::new(TokenKind::CommaSeperator);
+            let float = float_array_vec(vec![
+                b'1', b'4', b'2', b'0', b'1', b'3', b'.', b'0', b'8', b'7'
+            ]);
+            let _float_lit = Token::new(TokenKind::FloatLiteral(float));
+            let _int_lit = Token::new(TokenKind::IntLiteral(0));
+            let _m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
+            let _checksum = Token::new(TokenKind::Checksum(66));
+            assert_matches!(lexer.next(), Some(Ok(_header)));
+            assert_matches!(lexer.next(), Some(Ok(_sentence_type)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_float_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_checksum)));
+        }
+
+        const INCORRECT_WO_LOCATION: &str = "$GPGGA,142018.087,,,,,0,0,,,,M,,M,,*43";
+
+        #[test]
+        fn incorrect_wo_location() {
+            let mut lexer = t_lexer(INCORRECT_WO_LOCATION);
+            let _header = Token::new(TokenKind::Header([b'G', b'P']));
+            let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
+            let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
+            let _comma = Token::new(TokenKind::CommaSeperator);
+            let float = float_array_vec(vec![
+                b'1', b'4', b'2', b'0', b'1', b'8', b'.', b'0', b'8', b'7'
+            ]);
+            let _float_lit = Token::new(TokenKind::FloatLiteral(float));
+            let _int_lit = Token::new(TokenKind::IntLiteral(0));
+            let _m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
+            assert_matches!(lexer.next(), Some(Ok(_header)));
+            assert_matches!(lexer.next(), Some(Ok(_sentence_type)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_float_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            assert_matches!(lexer.next(), Some(Err(Error::InvalidChecksum(67, 101))));
+        }
+    }
 }
