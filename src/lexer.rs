@@ -638,7 +638,6 @@ mod tests {
         }
     }
 
-    // TODO: Test more complex case (NMEA sentence)
     mod nmea {
         use super::{float_array_vec, str_array_vec, t_lexer, Error, Token, TokenKind};
 
