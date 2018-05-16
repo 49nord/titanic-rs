@@ -7,7 +7,9 @@ const CHECKSUM_LENGTH: usize = 2;
 const HEADER_LENGTH: usize = 2;
 const NUMBER_LENGTH: usize = 32;
 const STRING_LENGTH: usize = 64;
-const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
+/// Excluded chars can be found
+/// [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
+pub const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
 
 quick_error!{
     #[derive(Debug)]
@@ -108,8 +110,6 @@ impl<R: io::Read> Tokenizer<R> {
         let prev = self.peek_buf;
 
         if let Some(c) = prev {
-            // Excluded chars can be found
-            // [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
             if !EXCLUDED_CHARS.contains(&c) {
                 self.cur_checksum ^= c;
             }
@@ -263,7 +263,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, TokenKind, Tokenizer, NUMBER_LENGTH, STRING_LENGTH};
+    use super::{Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
     use arrayvec::ArrayVec;
     use std::io::Cursor;
 
@@ -397,15 +397,113 @@ mod tests {
     #[test]
     fn check_comma() {
         let mut lexer = t_lexer(",");
-        assert_eq!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::CommaSeperator)
+        );
         assert!(lexer.next().is_none());
 
         let mut lexer = t_lexer(",a");
-        assert_eq!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
-        assert_ne!(lexer.next().unwrap().unwrap(), Token::new(TokenKind::CommaSeperator));
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::CommaSeperator)
+        );
+        assert_ne!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::CommaSeperator)
+        );
     }
 
-    // TODO: Test new line
-    // TODO: Test Checksum
+    #[test]
+    fn check_new_line() {
+        let mut lexer = t_lexer("\n");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::LineEnding)
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("\r");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::LineEnding)
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("\r\n");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::LineEnding)
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("\n\r\n\n\r");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::LineEnding)
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("\r\na");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::LineEnding)
+        );
+        assert!(lexer.next().is_some());
+    }
+
+    #[test]
+    fn check_checksum() {
+        let mut lexer = t_lexer("*00");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Checksum(0))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("*0");
+        assert!(lexer.next().unwrap().is_err());
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("*");
+        assert!(lexer.next().unwrap().is_err());
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("*00\n");
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Checksum(0))
+        );
+        assert!(lexer.next().is_some());
+
+        let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+
+        let mut lexer = t_lexer("test*16").skip(1);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Checksum(expected))
+        );
+        assert!(lexer.next().is_none());
+
+        let mut lexer = t_lexer("$test*16").skip(2);
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Checksum(expected))
+        );
+        assert!(lexer.next().is_none());
+
+        let ex_chars = EXCLUDED_CHARS
+            .iter()
+            .map(|&b| b as char)
+            .collect::<String>();
+        let input = format!("{}*00", ex_chars);
+        let mut lexer = t_lexer(&input).skip(3);
+        // This test depends on the ordering of EXCLUDED_CHARS
+        assert_eq!(
+            lexer.next().unwrap().unwrap(),
+            Token::new(TokenKind::Checksum(0))
+        );
+        assert!(lexer.next().is_none());
+    }
     // TODO: Test more complex case (NMEA sentence)
 }
