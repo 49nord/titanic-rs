@@ -112,6 +112,8 @@ impl<R: io::Read> Tokenizer<R> {
         if let Some(c) = prev {
             if !EXCLUDED_CHARS.contains(&c) {
                 self.cur_checksum ^= c;
+            } else if c == b'$' {
+                self.cur_checksum = 0;
             }
         }
 
