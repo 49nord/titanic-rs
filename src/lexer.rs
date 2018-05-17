@@ -3,10 +3,10 @@ use arrayvec::{ArrayVec, CapacityError};
 use std::str::{self, FromStr};
 use std::{io, num};
 
-const CHECKSUM_LENGTH: usize = 2;
-const HEADER_LENGTH: usize = 2;
-const NUMBER_LENGTH: usize = 32;
-const STRING_LENGTH: usize = 64;
+pub const CHECKSUM_LENGTH: usize = 2;
+pub const HEADER_LENGTH: usize = 2;
+pub const NUMBER_LENGTH: usize = 32;
+pub const STRING_LENGTH: usize = 64;
 /// Excluded chars can be found
 /// [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
 pub const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
@@ -78,7 +78,7 @@ pub enum TokenKind {
 
 #[derive(Debug, PartialEq)]
 pub struct Token {
-    kind: TokenKind,
+    pub kind: TokenKind,
 }
 
 impl Token {
@@ -106,7 +106,7 @@ impl<R: io::Read> Tokenizer<R> {
         Ok(tk)
     }
 
-    pub fn advance(&mut self) -> Result<Option<u8>, io::Error> {
+    fn advance(&mut self) -> Result<Option<u8>, io::Error> {
         let prev = self.peek_buf;
 
         if let Some(c) = prev {

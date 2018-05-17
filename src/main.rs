@@ -8,5 +8,6 @@ extern crate quick_error;
 #[macro_use]
 mod macros;
 mod lexer;
+mod parser;
 
 fn main() {}
