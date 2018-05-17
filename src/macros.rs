@@ -9,13 +9,38 @@ macro_rules! try_some {
     };
 }
 
+// TODO: Document more what is happening and how to use it.
 #[macro_export]
 macro_rules! accept {
-    ($self:expr, $tokpat:pat, $tokthen:block) => {
+    ($self:expr, $toktype:ident) => {
         match $self.lexer.peek() {
-            Some(&Ok(Token { kind: $tokpat, .. })) => {
-                if let Some(Ok(Token { kind: $tokpat, .. })) = $self.lexer.next() {
-                    Ok(Some($tokthen))
+            Some(Ok(Token {
+                kind: TokenKind::$toktype,
+                ..
+            })) => Ok(Some(TokenKind::$toktype)),
+            Some(&Err(_)) => {
+                if let Some(Err(e)) = $self.lexer.next() {
+                    Err(e)
+                } else {
+                    unreachable!()
+                }
+            }
+            _ => Ok(None),
+        }
+    };
+
+    ($self:expr, $toktype:ident, $tokdata:ident) => {
+        match $self.lexer.peek() {
+            Some(Ok(Token {
+                kind: TokenKind::$toktype(_),
+                ..
+            })) => {
+                if let Some(Ok(Token {
+                    kind: TokenKind::$toktype($tokdata),
+                    ..
+                })) = $self.lexer.next()
+                {
+                    Ok(Some($tokdata))
                 } else {
                     unreachable!()
                 }
@@ -34,10 +59,18 @@ macro_rules! accept {
 
 #[macro_export]
 macro_rules! expect {
-    ($self:expr, $tokpat:pat, $tokthen:block) => {
-        match accept!($self, $tokpat, $tokthen)? {
-            Some(t) => Some(t),
-            None => return Err(ParseError::UnexpectedToken),
+    ($self:expr, $toktype:ident) => {
+        match accept!($self, $toktype) {
+            Ok(Some(t)) => Ok(t),
+            Ok(None) => Err(ParseError::UnexpectedToken),
+            Err(e) => Err(e.into()),
+        }
+    };
+    ($self:expr, $toktype:ident, $tokdata:ident) => {
+        match accept!($self, $toktype, $tokdata) {
+            Ok(Some(t)) => Ok(t),
+            Ok(None) => Err(ParseError::UnexpectedToken),
+            Err(e) => Err(e.into()),
         }
     };
 }

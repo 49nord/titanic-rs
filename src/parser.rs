@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use std::{io, iter};
 
 use lexer::{self, Error as LexError, Token, TokenKind};
@@ -14,6 +15,10 @@ quick_error! {
             description("Unexpected token")
             display("Encountered unexpected token")
         }
+        UnexpectedSentenceType {
+            description("Sentence type has wrong format")
+            display("Encountered unexpected sentence type")
+        }
     }
 }
 
@@ -28,8 +33,12 @@ pub enum GpsQualityIndicator {
 
 }
 
+trait NmeaSentence {
+    fn sentence_type() -> ArrayVec<[u8; lexer::STRING_LENGTH]>;
+}
+
 pub struct GgaSentence {
-    header: [u8; lexer::HEADER_LENGTH],
+    talker_id: [u8; lexer::HEADER_LENGTH],
     /// Universal Time Coordinated (UTC)
     utc: f64,
     /// Latitude
@@ -54,8 +63,12 @@ impl<R: io::Read> GgaParser<R> {
     }
 
     pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
-        let a = expect!(self, TokenKind::Header(_h), { _h });
-        println!("{:?}", a);
+        let talker_id = expect!(self, Header, h)?;
+        let sentence_type = expect!(self, StringLiteral, s)?;
+        if sentence_type.len() != 3 {
+            return Err(ParseError::UnexpectedSentenceType);
+        }
+        expect!(self, CommaSeperator)?;
         Ok(None)
     }
 
