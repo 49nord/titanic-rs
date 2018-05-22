@@ -17,7 +17,10 @@ macro_rules! accept {
             Some(Ok(Token {
                 kind: TokenKind::$toktype,
                 ..
-            })) => Ok(Some(TokenKind::$toktype)),
+            })) => {
+                $self.lexer.next();
+                Ok(Some(TokenKind::$toktype))
+            }
             Some(&Err(_)) => {
                 if let Some(Err(e)) = $self.lexer.next() {
                     Err(e)

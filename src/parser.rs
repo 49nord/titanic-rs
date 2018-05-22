@@ -19,9 +19,14 @@ quick_error! {
             description("Sentence type has wrong format")
             display("Encountered unexpected sentence type")
         }
+        Incomplete {
+            description("Incomplete sentence")
+            display("Could not complete the sentence due to EOF")
+        }
     }
 }
 
+#[derive(Debug)]
 pub enum CardinalDir {
     North,
     East,
@@ -33,10 +38,7 @@ pub enum GpsQualityIndicator {
 
 }
 
-trait NmeaSentence {
-    fn sentence_type() -> ArrayVec<[u8; lexer::STRING_LENGTH]>;
-}
-
+#[derive(Debug)]
 pub struct GgaSentence {
     talker_id: [u8; lexer::HEADER_LENGTH],
     /// Universal Time Coordinated (UTC)
@@ -51,6 +53,7 @@ pub struct GgaSentence {
     long_dir: Option<CardinalDir>,
 }
 
+#[derive(Debug)]
 pub struct GgaParser<R: io::Read> {
     lexer: iter::Peekable<lexer::Tokenizer<R>>,
 }
@@ -64,11 +67,47 @@ impl<R: io::Read> GgaParser<R> {
 
     pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
         let talker_id = expect!(self, Header, h)?;
-        let sentence_type = expect!(self, StringLiteral, s)?;
-        if sentence_type.len() != 3 {
-            return Err(ParseError::UnexpectedSentenceType);
+        let sen_type = expect!(self, StringLiteral, s)?;
+        match sen_type.as_slice() {
+            b"GGA" => {
+                expect!(self, CommaSeparator)?;
+                self.parse_gga(talker_id)
+            }
+            _ => Err(ParseError::UnexpectedSentenceType),
         }
-        expect!(self, CommaSeperator)?;
+    }
+
+    fn parse_gga(
+        &mut self,
+        talker_id: [u8; lexer::HEADER_LENGTH],
+    ) -> Result<Option<GgaSentence>, ParseError> {
+        // TODO: Clarify if commas should be ignored
+        let utc = expect!(self, FloatLiteral, f)?;
+        expect!(self, CommaSeparator)?;
+        let lat = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(f),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        let lat_dir = match accept!(self, StringLiteral, s)? {
+            Some(ref s) if s.as_slice() == b"N" => Some(CardinalDir::North),
+            Some(ref s) if s.as_slice() == b"S" => Some(CardinalDir::South),
+            Some(_) => return Err(ParseError::UnexpectedToken),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        let long = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(f),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        let long_dir = match accept!(self, StringLiteral, s)? {
+            Some(ref s) if s.as_slice() == b"E" => Some(CardinalDir::East),
+            Some(ref s) if s.as_slice() == b"W" => Some(CardinalDir::West),
+            Some(_) => return Err(ParseError::UnexpectedToken),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
         Ok(None)
     }
 

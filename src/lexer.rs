@@ -69,7 +69,7 @@ impl From<(u8, u8)> for Error {
 pub enum TokenKind {
     Header([u8; HEADER_LENGTH]),
     StringLiteral(ArrayVec<[u8; STRING_LENGTH]>),
-    CommaSeperator,
+    CommaSeparator,
     FloatLiteral(ArrayVec<[u8; NUMBER_LENGTH]>),
     IntLiteral(i64),
     Checksum(u8),
@@ -87,6 +87,7 @@ impl Token {
     }
 }
 
+#[derive(Debug)]
 pub struct Tokenizer<R> {
     input: io::Bytes<R>,
     peek_buf: Option<u8>,
@@ -217,7 +218,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
             }
             Some(c) if c == b',' => {
                 try_some!(self.advance());
-                Some(Ok(Token::new(TokenKind::CommaSeperator)))
+                Some(Ok(Token::new(TokenKind::CommaSeparator)))
             }
             Some(c) if c == b'\r' || c == b'\n' => {
                 while let Some(nl) = self.peek_buf {
@@ -470,7 +471,7 @@ mod tests {
             assert_matches!(
                 lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::CommaSeperator
+                    kind: TokenKind::CommaSeparator
                 }))
             );
             assert!(lexer.next().is_none());
@@ -482,7 +483,7 @@ mod tests {
             assert_matches!(
                 lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::CommaSeperator
+                    kind: TokenKind::CommaSeparator
                 }))
             );
             assert!(lexer.next().is_some());
@@ -649,7 +650,7 @@ mod tests {
             let _header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
             let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
-            let _comma = Token::new(TokenKind::CommaSeperator);
+            let _comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
                 b'1', b'4', b'2', b'0', b'1', b'3', b'.', b'0', b'8', b'7'
             ]);
@@ -689,7 +690,7 @@ mod tests {
             let _header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
             let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
-            let _comma = Token::new(TokenKind::CommaSeperator);
+            let _comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
                 b'1', b'4', b'2', b'0', b'1', b'8', b'.', b'0', b'8', b'7'
             ]);
