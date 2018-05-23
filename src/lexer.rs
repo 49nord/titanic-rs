@@ -554,7 +554,7 @@ mod tests {
     }
 
     mod checksum {
-        use super::{t_lexer, Token, TokenKind, EXCLUDED_CHARS};
+        use super::{str_array_vec, t_lexer, Error, Token, TokenKind, EXCLUDED_CHARS};
 
         #[test]
         fn empty_message() {
@@ -571,14 +571,34 @@ mod tests {
         #[test]
         fn only_one_hex() {
             let mut lexer = t_lexer("*0");
-            assert!(lexer.next().unwrap().is_err());
+            assert_matches!(lexer.next(), Some(Err(Error::UnexpectedEof(_))));
             assert!(lexer.next().is_none());
         }
 
         #[test]
         fn only_asterisk() {
             let mut lexer = t_lexer("*");
-            assert!(lexer.next().unwrap().is_err());
+            assert_matches!(lexer.next(), Some(Err(Error::UnexpectedEof(_))));
+            assert!(lexer.next().is_none());
+        }
+
+        #[test]
+        fn not_a_hex() {
+            let mut lexer = t_lexer("*Z5");
+            let _expected = str_array_vec(vec![b'Z']);
+            assert_matches!(lexer.next(), Some(Err(Error::IncompleteToken(_))));
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::StringLiteral(_expected)
+                }))
+            );
+            assert_matches!(
+                lexer.next(),
+                Some(Ok(Token {
+                    kind: TokenKind::IntLiteral(5)
+                }))
+            );
             assert!(lexer.next().is_none());
         }
 
