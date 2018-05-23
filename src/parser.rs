@@ -1,5 +1,6 @@
 use arrayvec::ArrayVec;
-use std::{io, iter};
+use chrono::{self, NaiveTime};
+use std::{io, iter, str};
 
 use lexer::{self, Error as LexError, Token, TokenKind};
 
@@ -10,6 +11,7 @@ quick_error! {
             from()
             description(err.description())
             display("Could not parse due to an error in the lexer: {}", err)
+            cause(err)
         }
         UnexpectedToken {
             description("Unexpected token")
@@ -22,6 +24,12 @@ quick_error! {
         Incomplete {
             description("Incomplete sentence")
             display("Could not complete the sentence due to EOF")
+        }
+        Time(err: chrono::format::ParseError) {
+            from()
+            description("Time parsing error")
+            display("Failed to parse FloatLiteral as time: {}", err)
+            cause(err)
         }
     }
 }
@@ -82,7 +90,8 @@ impl<R: io::Read> GgaParser<R> {
         talker_id: [u8; lexer::HEADER_LENGTH],
     ) -> Result<Option<GgaSentence>, ParseError> {
         // TODO: Clarify if commas should be ignored
-        let utc = expect!(self, FloatLiteral, f)?;
+        let utc = fl_to_utc(expect!(self, FloatLiteral, f)?)?;
+        println!("utc: {}", utc);
         expect!(self, CommaSeparator)?;
         let lat = match accept!(self, FloatLiteral, f)? {
             Some(f) => Some(f),
@@ -110,30 +119,10 @@ impl<R: io::Read> GgaParser<R> {
         expect!(self, CommaSeparator)?;
         Ok(None)
     }
+}
 
-    // pub fn read_sentence() {
-    //     // every sentence must start with a header
-
-    //     if let  Token{ kind: TokenKind::Header(talker_id) }= self.lexer.next().ok_or(Err::UnexpectedEOF)?? {
-    //         // got a valid header!
-
-    //         // parse the correct structure
-    //         if let Token { kind: TokenKind::StringLiteral(s) } = self.lexer.next() {
-    //             match s.as_slice() {
-    //                 b"GGA" => parse_gga();
-    //                 _ => unimplemented!() // err: expected known sentence type
-    //             }
-    //         } else {
-    //             unimplemented!() // err: expected String
-    //         }
-    //     } else {
-    //         unimplemented!(); // err: expected header
-    //     }
-    // }
-
-    // pub fn read_gga() {
-    //     if let Token { kind: TokenKind::FloatLiteral(fv) } = self.lexer.next() {
-
-    //     }
-    // }
+/// Converts the data of a `TokenKind::FloatLiteral` to a time.
+/// The input has to be in the format `hhmmss.sss`.
+fn fl_to_utc(utc: ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
+    NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.3f")
 }

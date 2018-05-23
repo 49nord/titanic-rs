@@ -6,6 +6,7 @@ authors = ["Carl Scherer <carl.scherer@49nord.de>"]
 [dependencies]
 quick-error = "1.2.1"
 arrayvec = "0.4.7"
+chrono = "0.4.2"
 
 [dev-dependencies]
 assert_matches = "1.2.0"
