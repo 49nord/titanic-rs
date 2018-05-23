@@ -1,8 +1,8 @@
 use arrayvec::ArrayVec;
 use chrono::{self, NaiveTime};
-use std::{io, iter, str};
-
 use lexer::{self, Error as LexError, Token, TokenKind};
+use std::str::{self, FromStr};
+use std::{io, iter};
 
 quick_error! {
     #[derive(Debug)]
@@ -31,15 +31,27 @@ quick_error! {
             display("Failed to parse FloatLiteral as time: {}", err)
             cause(err)
         }
+        Longitude {
+            description("Longitude parsing error")
+            display("Failed to parse a FloatLiteral as longitude")
+        }
+        Latitude {
+            description("Latitude parsing error")
+            display("Failed to parse a FloatLiteral as latitude")
+        }
     }
 }
 
 #[derive(Debug)]
-pub enum CardinalDir {
+pub enum LatDir {
     North,
-    East,
     South,
-    West,
+}
+
+#[derive(Debug)]
+pub enum LongDir {
+    East = 1,
+    West = -1,
 }
 
 pub enum GpsQualityIndicator {
@@ -53,12 +65,8 @@ pub struct GgaSentence {
     utc: f64,
     /// Latitude
     lat: Option<f64>,
-    /// North or South
-    lat_dir: Option<CardinalDir>,
-    /// Longitude
+    /// Longitude in
     long: Option<f64>,
-    /// East or West
-    long_dir: Option<CardinalDir>,
 }
 
 #[derive(Debug)]
@@ -99,10 +107,14 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
         let lat_dir = match accept!(self, StringLiteral, s)? {
-            Some(ref s) if s.as_slice() == b"N" => Some(CardinalDir::North),
-            Some(ref s) if s.as_slice() == b"S" => Some(CardinalDir::South),
+            Some(ref s) if s.as_slice() == b"N" => Some(LatDir::North),
+            Some(ref s) if s.as_slice() == b"S" => Some(LatDir::South),
             Some(_) => return Err(ParseError::UnexpectedToken),
             None => None,
+        };
+        let lat = match (lat, lat_dir) {
+            (Some(l), Some(d)) => Some(fl_to_lat(l, d)?),
+            (_, _) => None,
         };
         expect!(self, CommaSeparator)?;
         let long = match accept!(self, FloatLiteral, f)? {
@@ -111,11 +123,15 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
         let long_dir = match accept!(self, StringLiteral, s)? {
-            Some(ref s) if s.as_slice() == b"E" => Some(CardinalDir::East),
-            Some(ref s) if s.as_slice() == b"W" => Some(CardinalDir::West),
+            Some(ref s) if s.as_slice() == b"E" => Some(LongDir::East),
+            Some(ref s) if s.as_slice() == b"W" => Some(LongDir::West),
             Some(_) => return Err(ParseError::UnexpectedToken),
             None => None,
         };
+        // let long = match (long, long_dir) {
+        //     (Some(l), Some(d)) => Some(fl_to_long(l, d)?),
+        //     (_, _) => None,
+        // };
         expect!(self, CommaSeparator)?;
         Ok(None)
     }
@@ -124,5 +140,26 @@ impl<R: io::Read> GgaParser<R> {
 /// Converts the data of a `TokenKind::FloatLiteral` to a time.
 /// The input has to be in the format `hhmmss.sss`.
 fn fl_to_utc(utc: ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
+    // unwrap can be used since we know that utc is only valid ascii
     NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.3f")
+}
+
+fn fl_to_lat(lat: ArrayVec<[u8; lexer::NUMBER_LENGTH]>, dir: LatDir) -> Result<f64, ParseError> {
+    // let lat_dot_pos = 4;
+    // match lat.get(4) {
+    //     None => return
+    //     Some(b'.') =>
+    // }
+    const DEG_SPLIT: usize = 2;
+    if DEG_SPLIT > lexer::NUMBER_LENGTH {
+        return Err(ParseError::Latitude);
+    }
+    let (deg_str, dec_min) = lat.split_at(DEG_SPLIT);
+    if deg_str.contains(&b'.') || !dec_min.contains(&b'.') {
+        return Err(ParseError::Latitude);
+    }
+    // TODO: Change Errorhandling
+    let degrees = i8::from_str("deg_str");
+    
+    Ok(0.0)
 }
