@@ -65,14 +65,14 @@ macro_rules! expect {
     ($self:expr, $toktype:ident) => {
         match accept!($self, $toktype) {
             Ok(Some(t)) => Ok(t),
-            Ok(None) => Err(ParseError::UnexpectedToken),
+            Ok(None) => Err(err::ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
         }
     };
     ($self:expr, $toktype:ident, $tokdata:ident) => {
         match accept!($self, $toktype, $tokdata) {
             Ok(Some(t)) => Ok(t),
-            Ok(None) => Err(ParseError::UnexpectedToken),
+            Ok(None) => Err(err::ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
         }
     };

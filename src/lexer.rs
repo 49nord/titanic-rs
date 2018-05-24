@@ -1,7 +1,8 @@
 use arrayvec::{ArrayVec, CapacityError};
-
 use std::str::{self, FromStr};
-use std::{io, num};
+use std::io;
+
+use err::LexError;
 
 pub const CHECKSUM_LENGTH: usize = 2;
 pub const HEADER_LENGTH: usize = 2;
@@ -11,57 +12,16 @@ pub const STRING_LENGTH: usize = 64;
 /// [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
 pub const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
 
-quick_error!{
-    #[derive(Debug)]
-    pub enum Error {
-        InvalidCharacter(c: u8) {
-            from()
-            description("Invalid character")
-            display("Encountered invalid character \"{}\"", *c as char)
-        }
-        InvalidChecksum(expected: u8, actual: u8) {
-            description("Invalid checksum")
-            display("Expected checksum \"{:X}\" , found checksum \"{}\"", expected, actual)
-        }
-        Io(err: io::Error) {
-            from()
-            description(err.description())
-            display("Encountered I/O error while lexing: {}", err)
-            cause(err)
-        }
-        UnexpectedEof(token: &'static str) {
-            from()
-            description("Unexpected EOF")
-            display("Encountered unexpected EOF in {}", token)
-        }
-        IncompleteToken(token: &'static str) {
-            description("Incomplete token")
-            display("Could not complete token of type {}", token)
-        }
-        ArrayOverflow(err: CapacityError<u8>, capacity: usize) {
-            description(err.description())
-            display("Tried to push more than {} characters into the buffer: {}", capacity, err)
-            cause(err)
-        }
-        Int(err: num::ParseIntError) {
-            from()
-            description(err.description())
-            display("{}", err)
-            cause(err)
-        }
-    }
-}
-
 // Quick error can't handle from for tuples
-impl From<(CapacityError<u8>, usize)> for Error {
+impl From<(CapacityError<u8>, usize)> for LexError {
     fn from((e, cap): (CapacityError<u8>, usize)) -> Self {
-        Error::ArrayOverflow(e, cap)
+        LexError::ArrayOverflow(e, cap)
     }
 }
 
-impl From<(u8, u8)> for Error {
+impl From<(u8, u8)> for LexError {
     fn from((expected, actual): (u8, u8)) -> Self {
-        Error::InvalidChecksum(expected, actual)
+        LexError::InvalidChecksum(expected, actual)
     }
 }
 
@@ -132,7 +92,7 @@ impl<R: io::Read> Tokenizer<R> {
 }
 
 impl<R: io::Read> Iterator for Tokenizer<R> {
-    type Item = Result<Token, Error>;
+    type Item = Result<Token, LexError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.peek_buf {
@@ -170,7 +130,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     try_some!(self.advance());
                     if let Some(d) = self.peek_buf {
                         if !d.is_ascii_digit() {
-                            return Some(Err(Error::IncompleteToken("Number")));
+                            return Some(Err(LexError::IncompleteToken("Number")));
                         }
                     }
                 }
@@ -244,7 +204,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                                 return Some(Err((e, buf.capacity()).into()));
                             }
                         }
-                        Some(_) => return Some(Err(Error::IncompleteToken("Checksum"))),
+                        Some(_) => return Some(Err(LexError::IncompleteToken("Checksum"))),
                     }
                     try_some!(self.advance());
                 }
@@ -266,7 +226,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Error, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
+    use super::{LexError, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
     use arrayvec::ArrayVec;
     use std::io::Cursor;
 
@@ -554,7 +514,7 @@ mod tests {
     }
 
     mod checksum {
-        use super::{str_array_vec, t_lexer, Error, Token, TokenKind, EXCLUDED_CHARS};
+        use super::{str_array_vec, t_lexer, LexError, Token, TokenKind, EXCLUDED_CHARS};
 
         #[test]
         fn empty_message() {
@@ -571,14 +531,14 @@ mod tests {
         #[test]
         fn only_one_hex() {
             let mut lexer = t_lexer("*0");
-            assert_matches!(lexer.next(), Some(Err(Error::UnexpectedEof(_))));
+            assert_matches!(lexer.next(), Some(Err(LexError::UnexpectedEof(_))));
             assert!(lexer.next().is_none());
         }
 
         #[test]
         fn only_asterisk() {
             let mut lexer = t_lexer("*");
-            assert_matches!(lexer.next(), Some(Err(Error::UnexpectedEof(_))));
+            assert_matches!(lexer.next(), Some(Err(LexError::UnexpectedEof(_))));
             assert!(lexer.next().is_none());
         }
 
@@ -586,7 +546,7 @@ mod tests {
         fn not_a_hex() {
             let mut lexer = t_lexer("*Z5");
             let _expected = str_array_vec(vec![b'Z']);
-            assert_matches!(lexer.next(), Some(Err(Error::IncompleteToken(_))));
+            assert_matches!(lexer.next(), Some(Err(LexError::IncompleteToken(_))));
             assert_matches!(
                 lexer.next(),
                 Some(Ok(Token {
@@ -660,7 +620,7 @@ mod tests {
     }
 
     mod nmea {
-        use super::{float_array_vec, str_array_vec, t_lexer, Error, Token, TokenKind};
+        use super::{float_array_vec, str_array_vec, t_lexer, LexError, Token, TokenKind};
 
         const CORRECT_WO_LOCATION: &str = "$GPGGA,142013.087,,,,,0,0,,,M,,M,,*42";
 
@@ -739,7 +699,7 @@ mod tests {
             assert_matches!(lexer.next(), Some(Ok(_m_lit)));
             assert_matches!(lexer.next(), Some(Ok(_comma)));
             assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Err(Error::InvalidChecksum(67, 101))));
+            assert_matches!(lexer.next(), Some(Err(LexError::InvalidChecksum(67, 101))));
         }
     }
 }

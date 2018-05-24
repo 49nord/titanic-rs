@@ -6,6 +6,7 @@ extern crate chrono;
 #[macro_use]
 extern crate quick_error;
 
+mod err;
 #[macro_use]
 mod macros;
 mod lexer;
