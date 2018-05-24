@@ -15,6 +15,7 @@ pub enum CardDir {
 }
 
 impl CardDir {
+    #[inline]
     fn get_sign(&self) -> isize {
         match self {
             CardDir::North | CardDir::East => 1,
@@ -23,8 +24,37 @@ impl CardDir {
     }
 }
 
+#[derive(Debug)]
 pub enum GpsQualityInd {
+    FixNotAvailable,
+    GpsFix,
+    DifferentialGpsFix,
+    PpsFix,
+    RealTimeKinematic,
+    FloatRtk,
+    Estimated,
+    ManualInputMode,
+    SimulationMode,
+}
 
+impl GpsQualityInd {
+    /// Takes an integer in the range `0..=8` and returns the corresponding
+    /// `GpsQualityInd`.
+    #[inline]
+    fn try_from_int(int: i64) -> Result<Self, ParseError> {
+        match int {
+            0 => Ok(GpsQualityInd::FixNotAvailable),
+            1 => Ok(GpsQualityInd::GpsFix),
+            2 => Ok(GpsQualityInd::DifferentialGpsFix),
+            3 => Ok(GpsQualityInd::PpsFix),
+            4 => Ok(GpsQualityInd::RealTimeKinematic),
+            5 => Ok(GpsQualityInd::FloatRtk),
+            6 => Ok(GpsQualityInd::Estimated),
+            7 => Ok(GpsQualityInd::ManualInputMode),
+            8 => Ok(GpsQualityInd::SimulationMode),
+            _ => Err(ParseError::UnexpectedToken),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -32,10 +62,18 @@ pub struct GgaSentence {
     talker_id: [u8; lexer::HEADER_LENGTH],
     /// Universal Time Coordinated (UTC)
     utc: NaiveTime,
-    /// Latitude in decimal degrees (positive)
+    /// Latitude in decimal degrees.
+    /// A positive value indicates that the coordinate is in the northern hemisphere.
+    /// A negative value indicates that the coordinate is in the southern hemisphere.
     lat: Option<f64>,
-    /// Longitude in
+    /// Longitude in decimal degrees.
+    /// A positive value indicates that the coordinate is in the eastern hemisphere.
+    /// A negative value indicates that the coordinate is in the western hemisphere.
     long: Option<f64>,
+    /// Indicates the quality of the gps data.
+    gps_qlty: GpsQualityInd,
+    /// Number of satellites in view.
+    sat_view: u64,
 }
 
 #[derive(Debug)]
@@ -70,7 +108,6 @@ impl<R: io::Read> GgaParser<R> {
 
         // Parse utc
         let utc = fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
-        println!("utc: {}", utc);
         expect!(self, CommaSeparator)?;
 
         // Parse latitude
@@ -82,7 +119,7 @@ impl<R: io::Read> GgaParser<R> {
         let lat_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"N" => Some(CardDir::North),
             Some(ref s) if s.as_slice() == b"S" => Some(CardDir::South),
-            Some(_) => return Err(ParseError::UnexpectedToken),
+            Some(s) => return Err(ParseError::UnexpectedDir(s)),
             None => None,
         };
         let lat = match (lat, lat_dir) {
@@ -91,7 +128,7 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
 
-        // Parse Longitude
+        // Parse longitude
         let long = match accept!(self, FloatLiteral, f)? {
             Some(f) => Some(f),
             None => None,
@@ -100,7 +137,7 @@ impl<R: io::Read> GgaParser<R> {
         let long_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"E" => Some(CardDir::East),
             Some(ref s) if s.as_slice() == b"W" => Some(CardDir::West),
-            Some(_) => return Err(ParseError::UnexpectedToken),
+            Some(s) => return Err(ParseError::UnexpectedDir(s)),
             None => None,
         };
         let long = match (long, long_dir) {
@@ -109,11 +146,24 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
 
+        // Parse quality indicator
+        let gps_qlty = GpsQualityInd::try_from_int(expect!(self, IntLiteral, i)?)?;
+        expect!(self, CommaSeparator)?;
+
+        // Parse satellites in view
+        let sat_view = match expect!(self, IntLiteral, i)? {
+            i if i < 0 => return Err(ParseError::SatInView(i)),
+            i => i as u64,
+        };
+        expect!(self, CommaSeparator)?;
+
         Ok(Some(GgaSentence {
             talker_id,
             utc,
             lat,
             long,
+            gps_qlty,
+            sat_view,
         }))
     }
 }

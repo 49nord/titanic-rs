@@ -1,6 +1,8 @@
-use arrayvec::CapacityError;
+use arrayvec::{ArrayVec, CapacityError};
 use chrono;
 use std::{io, num};
+
+use lexer::STRING_LENGTH;
 
 quick_error! {
     #[derive(Debug)]
@@ -16,7 +18,7 @@ quick_error! {
             display("Encountered unexpected token")
         }
         UnexpectedSentenceType {
-            description("Sentence type has wrong format")
+            description("Unexpected sentence type")
             display("Encountered unexpected sentence type")
         }
         Incomplete {
@@ -33,6 +35,14 @@ quick_error! {
             from()
             description("Coordinate parsing error")
             display("Could not parse FloatLiteral as coordinate: {}", err)
+        }
+        SatInView(count: i64) {
+            description("Unexpected number of satellites in view")
+            display("Unexpected number of satellites in view: {}", count)
+        }
+        UnexpectedDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
+            description("Unexpected direction")
+            display("Could not parse {:?} as direction", dir)
         }
     }
 }
