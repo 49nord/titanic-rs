@@ -8,8 +8,8 @@ use lexer::{self, Token, TokenKind};
 
 #[derive(Debug)]
 pub enum LatDir {
-    North = 1,
-    South = -1,
+    North,
+    South,
 }
 
 #[derive(Debug)]
@@ -62,7 +62,7 @@ impl<R: io::Read> GgaParser<R> {
         talker_id: [u8; lexer::HEADER_LENGTH],
     ) -> Result<Option<GgaSentence>, ParseError> {
         // TODO: Clarify if commas should be ignored
-        let utc = fl_to_utc(expect!(self, FloatLiteral, f)?)?;
+        let utc = fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
         println!("utc: {}", utc);
         expect!(self, CommaSeparator)?;
         let lat = match accept!(self, FloatLiteral, f)? {
@@ -104,7 +104,7 @@ impl<R: io::Read> GgaParser<R> {
 /// Converts the data of a `TokenKind::FloatLiteral` to a time.
 /// The input has to be in the format `hhmmss.sss`.
 #[inline]
-fn fl_to_utc(utc: ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
+fn fl_to_utc(utc: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
     // unwrap can be used since we know that utc is only valid ascii
     NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.f")
 }

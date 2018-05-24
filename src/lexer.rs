@@ -96,17 +96,17 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.peek_buf {
-            None => return None,
+            None => None,
             Some(c) if c == b'$' => {
                 try_some!(self.advance());
                 let mut header = [0u8; HEADER_LENGTH];
-                for i in 0..HEADER_LENGTH {
+                for v in &mut header {
                     match try_some!(self.advance()) {
                         None => return Some(Err("Header".into())),
-                        Some(c) => header[i] = c,
+                        Some(c) => *v = c,
                     }
                 }
-                return Some(Ok(Token::new(TokenKind::Header(header))));
+                Some(Ok(Token::new(TokenKind::Header(header))))
             }
             Some(c) if c.is_ascii_alphabetic() => {
                 let mut buf = ArrayVec::<[u8; STRING_LENGTH]>::new();
@@ -119,7 +119,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     }
                     try_some!(self.advance());
                 }
-                return Some(Ok(Token::new(TokenKind::StringLiteral(buf))));
+                Some(Ok(Token::new(TokenKind::StringLiteral(buf))))
             }
             Some(c) if c.is_ascii_digit() || c == b'-' => {
                 let mut buf = ArrayVec::<[u8; NUMBER_LENGTH]>::new();
@@ -214,12 +214,12 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     Ok(i) => i,
                     Err(e) => return Some(Err(e.into())),
                 };
-                if !(expected_sum ^ actual_sum == 0) {
+                if expected_sum ^ actual_sum != 0 {
                     return Some(Err((expected_sum, actual_sum).into()));
                 }
                 Some(Ok(Token::new(TokenKind::Checksum(actual_sum))))
             }
-            Some(c) => return Some(Err(c.into())),
+            Some(c) => Some(Err(c.into())),
         }
     }
 }
