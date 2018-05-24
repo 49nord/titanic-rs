@@ -97,9 +97,9 @@ quick_error!{
             display("{}", err)
             cause(err)
         }
-        InvalidLat(val: f64) {
-            description("Invalid latitude")
-            display("Invalid latitude: {}", val)
+        InvalidCoord(val: f64, max: f64) {
+            description("Invalid coordinate")
+            display("Invalid coordinate: {} should be between {} and {}", val, max*-1.0, max)
         }
     }
 }
