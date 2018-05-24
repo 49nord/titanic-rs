@@ -1,6 +1,6 @@
 use arrayvec::CapacityError;
 use chrono;
-use std::{num, io};
+use std::{io, num};
 
 quick_error! {
     #[derive(Debug)]
@@ -29,13 +29,10 @@ quick_error! {
             display("Failed to parse FloatLiteral as time: {}", err)
             cause(err)
         }
-        Longitude {
-            description("Longitude parsing error")
-            display("Failed to parse a FloatLiteral as longitude")
-        }
-        Latitude {
-            description("Latitude parsing error")
-            display("Failed to parse a FloatLiteral as latitude")
+        Coordinate(err: CoordinateParseError) {
+            from()
+            description("Coordinate parsing error")
+            display("Could not parse FloatLiteral as coordinate: {}", err)
         }
     }
 }
@@ -77,6 +74,32 @@ quick_error!{
             description(err.description())
             display("{}", err)
             cause(err)
+        }
+    }
+}
+
+quick_error!{
+    #[derive(Debug)]
+    pub enum CoordinateParseError {
+        InvalidInput(msg: &'static str) {
+            description("Invalid input")
+            display("Invalid input: {}", msg)
+        }
+        Degrees(err: num::ParseIntError) {
+            from()
+            description(err.description())
+            display("{}", err)
+            cause(err)
+        }
+        DecimalMin(err: num::ParseFloatError) {
+            from()
+            description(err.description())
+            display("{}", err)
+            cause(err)
+        }
+        InvalidLat(val: f64) {
+            description("Invalid latitude")
+            display("Invalid latitude: {}", val)
         }
     }
 }

@@ -3,13 +3,13 @@ use chrono::{self, NaiveTime};
 use std::str::{self, FromStr};
 use std::{io, iter};
 
-use err;
+use err::{CoordinateParseError, ParseError};
 use lexer::{self, Token, TokenKind};
 
 #[derive(Debug)]
 pub enum LatDir {
-    North,
-    South,
+    North = 1,
+    South = -1,
 }
 
 #[derive(Debug)]
@@ -45,7 +45,7 @@ impl<R: io::Read> GgaParser<R> {
         })
     }
 
-    pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, err::ParseError> {
+    pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
         let talker_id = expect!(self, Header, h)?;
         let sen_type = expect!(self, StringLiteral, s)?;
         match sen_type.as_slice() {
@@ -53,14 +53,14 @@ impl<R: io::Read> GgaParser<R> {
                 expect!(self, CommaSeparator)?;
                 self.parse_gga(talker_id)
             }
-            _ => Err(err::ParseError::UnexpectedSentenceType),
+            _ => Err(ParseError::UnexpectedSentenceType),
         }
     }
 
     fn parse_gga(
         &mut self,
         talker_id: [u8; lexer::HEADER_LENGTH],
-    ) -> Result<Option<GgaSentence>, err::ParseError> {
+    ) -> Result<Option<GgaSentence>, ParseError> {
         // TODO: Clarify if commas should be ignored
         let utc = fl_to_utc(expect!(self, FloatLiteral, f)?)?;
         println!("utc: {}", utc);
@@ -73,11 +73,11 @@ impl<R: io::Read> GgaParser<R> {
         let lat_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"N" => Some(LatDir::North),
             Some(ref s) if s.as_slice() == b"S" => Some(LatDir::South),
-            Some(_) => return Err(err::ParseError::UnexpectedToken),
+            Some(_) => return Err(ParseError::UnexpectedToken),
             None => None,
         };
         let lat = match (lat, lat_dir) {
-            (Some(l), Some(d)) => Some(fl_to_lat(l, d)?),
+            (Some(l), Some(d)) => Some(fl_to_lat(&l, &d)?),
             (_, _) => None,
         };
         expect!(self, CommaSeparator)?;
@@ -89,7 +89,7 @@ impl<R: io::Read> GgaParser<R> {
         let long_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"E" => Some(LongDir::East),
             Some(ref s) if s.as_slice() == b"W" => Some(LongDir::West),
-            Some(_) => return Err(err::ParseError::UnexpectedToken),
+            Some(_) => return Err(ParseError::UnexpectedToken),
             None => None,
         };
         // let long = match (long, long_dir) {
@@ -106,25 +106,31 @@ impl<R: io::Read> GgaParser<R> {
 #[inline]
 fn fl_to_utc(utc: ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
     // unwrap can be used since we know that utc is only valid ascii
-    NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.3f")
+    NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.f")
 }
 
-fn fl_to_lat(lat: ArrayVec<[u8; lexer::NUMBER_LENGTH]>, dir: LatDir) -> Result<f64, err::ParseError> {
-    // let lat_dot_pos = 4;
-    // match lat.get(4) {
-    //     None => return
-    //     Some(b'.') =>
-    // }
+fn fl_to_lat(
+    lat: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>,
+    dir: &LatDir,
+) -> Result<f64, CoordinateParseError> {
+    if !lat.is_ascii() {
+        return Err(CoordinateParseError::InvalidInput("found non ascii bytes"));
+    }
+    // This check is needed to ensure we don't panic
     const DEG_SPLIT: usize = 2;
-    if DEG_SPLIT > lexer::NUMBER_LENGTH {
-        return Err(err::ParseError::Latitude);
+    if DEG_SPLIT > lat.len() {
+        return Err(CoordinateParseError::InvalidInput("input is too short"));
     }
-    let (deg_str, dec_min) = lat.split_at(DEG_SPLIT);
-    if deg_str.contains(&b'.') || !dec_min.contains(&b'.') {
-        return Err(err::ParseError::Latitude);
+    let (deg, dec_min) = lat.split_at(DEG_SPLIT);
+    // unwrap can be used since we know that lat is only valid ascii
+    let degrees = f64::from(i8::from_str(str::from_utf8(deg).unwrap())?);
+    let decimal_min = f64::from_str(str::from_utf8(dec_min).unwrap())? * f64::from(10 / 6);
+    let dec_deg = degrees + decimal_min;
+    if dec_deg.abs() > 90.0 {
+        return Err(CoordinateParseError::InvalidLat(dec_deg));
     }
-    // TODO: Change Errorhandling
-    let degrees = i8::from_str("deg_str");
-    
-    Ok(0.0)
+    match dir {
+        LatDir::North => Ok(degrees + decimal_min),
+        LatDir::South => Ok((degrees + decimal_min) * -1.0),
+    }
 }

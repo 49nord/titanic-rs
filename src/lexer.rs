@@ -1,6 +1,6 @@
 use arrayvec::{ArrayVec, CapacityError};
-use std::str::{self, FromStr};
 use std::io;
+use std::str::{self, FromStr};
 
 use err::LexError;
 
@@ -226,7 +226,8 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LexError, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH, STRING_LENGTH};
+    use super::{LexError, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH,
+                STRING_LENGTH};
     use arrayvec::ArrayVec;
     use std::io::Cursor;
 
