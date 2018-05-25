@@ -35,7 +35,7 @@ quick_error! {
             description("Unexpected number of satellites in view")
             display("Unexpected number of satellites in view: {}", count)
         }
-        UnexpectedDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
+        InvalidDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
             description("Unexpected direction")
             display("Could not parse {:?} as direction", dir)
         }
@@ -64,6 +64,10 @@ quick_error! {
         InvalidCoord(val: f64, max: f64) {
             description("Invalid coordinate")
             display("Invalid coordinate: {} should be between {:.0} and {:.0}", val, max*-1.0, max)
+        }
+        InvalidUnit {
+            description("Unexpected unit")
+            display("Found an unexpected unit")
         }
     }
 }

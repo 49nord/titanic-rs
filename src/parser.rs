@@ -82,6 +82,9 @@ pub struct GgaSentence {
     hdop: Option<f64>,
     /// Antenna Altitude above/below mean-sea-level (geoid) (in meters)
     altitude: Option<f64>,
+    /// Geoidal separation, the difference between the WGS-84 earth ellipsoid
+    /// and mean-sea-level (geoid), "-" means mean-sea-level below ellipsoid
+    geo_sep: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -127,7 +130,7 @@ impl<R: io::Read> GgaParser<R> {
         let lat_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"N" => Some(CardDir::North),
             Some(ref s) if s.as_slice() == b"S" => Some(CardDir::South),
-            Some(s) => return Err(ParseError::UnexpectedDir(s)),
+            Some(s) => return Err(ParseError::InvalidDir(s)),
             None => None,
         };
         let lat = match (lat, lat_dir) {
@@ -145,7 +148,7 @@ impl<R: io::Read> GgaParser<R> {
         let long_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"E" => Some(CardDir::East),
             Some(ref s) if s.as_slice() == b"W" => Some(CardDir::West),
-            Some(s) => return Err(ParseError::UnexpectedDir(s)),
+            Some(s) => return Err(ParseError::InvalidDir(s)),
             None => None,
         };
         let long = match (long, long_dir) {
@@ -172,10 +175,22 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
 
+        // Parse antenna altitude and check if the unit is meter
         let altitude = match accept!(self, FloatLiteral, f)? {
             Some(f) => Some(fl_as_f64(f.as_slice())?),
             None => None,
         };
+        expect!(self, CommaSeparator)?;
+        self.expect_meters()?;
+        expect!(self, CommaSeparator)?;
+
+        // Parse geoidal separation and check if the unit is meter
+        let geo_sep = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(fl_as_f64(f.as_slice())?),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        self.expect_meters()?;
         expect!(self, CommaSeparator)?;
 
         Ok(Some(GgaSentence {
@@ -186,7 +201,8 @@ impl<R: io::Read> GgaParser<R> {
             gps_qlty,
             sat_view,
             hdop,
-            altitude
+            altitude,
+            geo_sep,
         }))
     }
 
@@ -219,6 +235,16 @@ impl<R: io::Read> GgaParser<R> {
             str::from_utf8(&utc)?,
             "%H%M%S%.f",
         )?)
+    }
+
+    /// Check if the next token is a `StringLiteral` with the value b'M'.
+    /// Else return an error.
+    #[inline]
+    fn expect_meters(&mut self) -> Result<(), ParseError> {
+        if expect!(self, StringLiteral, s)?.as_slice() != b"M" {
+            return Err(ParseError::InvalidUnit);
+        }
+        Ok(())
     }
 }
 
