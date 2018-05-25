@@ -1,6 +1,6 @@
 use arrayvec::{ArrayVec, CapacityError};
 use chrono;
-use std::{io, num};
+use std::{io, num, str};
 
 use lexer::STRING_LENGTH;
 
@@ -31,11 +31,6 @@ quick_error! {
             display("Failed to parse FloatLiteral as time: {}", err)
             cause(err)
         }
-        Coordinate(err: CoordinateParseError) {
-            from()
-            description("Coordinate parsing error")
-            display("Could not parse FloatLiteral as coordinate: {}", err)
-        }
         SatInView(count: i64) {
             description("Unexpected number of satellites in view")
             display("Unexpected number of satellites in view: {}", count)
@@ -43,6 +38,32 @@ quick_error! {
         UnexpectedDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
             description("Unexpected direction")
             display("Could not parse {:?} as direction", dir)
+        }
+        Utf8(err: str::Utf8Error) {
+            from()
+            description(err.description())
+            display("{}", err)
+            cause(err)
+        }
+        InvalidInput(msg: &'static str) {
+            description("Invalid input")
+            display("Invalid input, {}", msg)
+        }
+        Int(err: num::ParseIntError) {
+            from()
+            description(err.description())
+            display("{}", err)
+            cause(err)
+        }
+        Float(err: num::ParseFloatError) {
+            from()
+            description(err.description())
+            display("{}", err)
+            cause(err)
+        }
+        InvalidCoord(val: f64, max: f64) {
+            description("Invalid coordinate")
+            display("Invalid coordinate: {} should be between {:.0} and {:.0}", val, max*-1.0, max)
         }
     }
 }
@@ -85,31 +106,11 @@ quick_error!{
             display("{}", err)
             cause(err)
         }
-    }
-}
-
-quick_error!{
-    #[derive(Debug)]
-    pub enum CoordinateParseError {
-        InvalidInput(msg: &'static str) {
-            description("Invalid input")
-            display("Invalid input: {}", msg)
-        }
-        Degrees(err: num::ParseIntError) {
+        NotEvenUtf8(err: str::Utf8Error) {
             from()
             description(err.description())
-            display("{}", err)
+            display("Expected ascii but did not even get valid utf8: {}", err)
             cause(err)
-        }
-        DecimalMin(err: num::ParseFloatError) {
-            from()
-            description(err.description())
-            display("{}", err)
-            cause(err)
-        }
-        InvalidCoord(val: f64, max: f64) {
-            description("Invalid coordinate")
-            display("Invalid coordinate: {} should be between {} and {}", val, max*-1.0, max)
         }
     }
 }

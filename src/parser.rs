@@ -1,10 +1,14 @@
-use arrayvec::ArrayVec;
-use chrono::{self, NaiveTime};
+use chrono::NaiveTime;
 use std::str::{self, FromStr};
 use std::{io, iter};
 
-use err::{CoordinateParseError, ParseError};
+use err::ParseError;
 use lexer::{self, Token, TokenKind};
+
+const LAT_SPLIT: usize = 2;
+const ABS_MAX_LAT: f64 = 90.0;
+const LONG_SPLIT: usize = 3;
+const ABS_MAX_LONG: f64 = 180.0;
 
 #[derive(Debug)]
 pub enum CardDir {
@@ -41,7 +45,7 @@ impl GpsQualityInd {
     /// Takes an integer in the range `0..=8` and returns the corresponding
     /// `GpsQualityInd`.
     #[inline]
-    fn try_from_int(int: i64) -> Result<Self, ParseError> {
+    fn try_from_i64(int: i64) -> Result<Self, ParseError> {
         match int {
             0 => Ok(GpsQualityInd::FixNotAvailable),
             1 => Ok(GpsQualityInd::GpsFix),
@@ -74,6 +78,10 @@ pub struct GgaSentence {
     gps_qlty: GpsQualityInd,
     /// Number of satellites in view.
     sat_view: u64,
+    /// Horizontal dilution of precision (meters)
+    hdop: Option<f64>,
+    /// Antenna Altitude above/below mean-sea-level (geoid) (in meters)
+    altitude: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -107,7 +115,7 @@ impl<R: io::Read> GgaParser<R> {
         // TODO: Clarify if commas should be ignored
 
         // Parse utc
-        let utc = fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
+        let utc = Self::fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
         expect!(self, CommaSeparator)?;
 
         // Parse latitude
@@ -123,7 +131,7 @@ impl<R: io::Read> GgaParser<R> {
             None => None,
         };
         let lat = match (lat, lat_dir) {
-            (Some(l), Some(d)) => Some(fl_to_lat(&l, &d)?),
+            (Some(lat), Some(d)) => Some(Self::parse_coord(&lat, &d, LAT_SPLIT, ABS_MAX_LAT)?),
             (_, _) => None,
         };
         expect!(self, CommaSeparator)?;
@@ -141,19 +149,32 @@ impl<R: io::Read> GgaParser<R> {
             None => None,
         };
         let long = match (long, long_dir) {
-            (Some(l), Some(d)) => Some(fl_to_long(&l, &d)?),
+            (Some(long), Some(d)) => Some(Self::parse_coord(&long, &d, LONG_SPLIT, ABS_MAX_LONG)?),
             (_, _) => None,
         };
         expect!(self, CommaSeparator)?;
 
         // Parse quality indicator
-        let gps_qlty = GpsQualityInd::try_from_int(expect!(self, IntLiteral, i)?)?;
+        let gps_qlty = GpsQualityInd::try_from_i64(expect!(self, IntLiteral, i)?)?;
         expect!(self, CommaSeparator)?;
 
         // Parse satellites in view
         let sat_view = match expect!(self, IntLiteral, i)? {
             i if i < 0 => return Err(ParseError::SatInView(i)),
             i => i as u64,
+        };
+        expect!(self, CommaSeparator)?;
+
+        // Parse horizontal dilution of precision
+        let hdop = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(fl_as_f64(f.as_slice())?),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+
+        let altitude = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(fl_as_f64(f.as_slice())?),
+            None => None,
         };
         expect!(self, CommaSeparator)?;
 
@@ -164,59 +185,44 @@ impl<R: io::Read> GgaParser<R> {
             long,
             gps_qlty,
             sat_view,
+            hdop,
+            altitude
         }))
     }
-}
 
-/// Converts the data of a `TokenKind::FloatLiteral` to a time.
-/// The input has to be in the format `hhmmss.sss`.
-#[inline]
-fn fl_to_utc(utc: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>) -> Result<NaiveTime, chrono::ParseError> {
-    // unwrap can be used since we know that utc is only valid ascii
-    NaiveTime::parse_from_str(str::from_utf8(&utc).unwrap(), "%H%M%S%.f")
-}
+    fn parse_coord(
+        coord: &[u8],
+        dir: &CardDir,
+        deg_split: usize,
+        abs_max: f64,
+    ) -> Result<f64, ParseError> {
+        // This check is needed to ensure we don't panic
+        if deg_split > coord.len() {
+            return Err(ParseError::InvalidInput("input is too short"));
+        }
 
-#[inline]
-fn fl_to_lat(
-    lat: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>,
-    dir: &CardDir,
-) -> Result<f64, CoordinateParseError> {
-    const DEG_SPLIT: usize = 2;
-    const MAX_ABS_LAT: f64 = 90.0;
-    parse_coord(lat, dir, DEG_SPLIT, MAX_ABS_LAT)
-}
-
-#[inline]
-fn fl_to_long(
-    long: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>,
-    dir: &CardDir,
-) -> Result<f64, CoordinateParseError> {
-    const DEG_SPLIT: usize = 3;
-    const MAX_ABS_LONG: f64 = 180.0;
-    parse_coord(long, dir, DEG_SPLIT, MAX_ABS_LONG)
-}
-
-fn parse_coord(
-    coord: &ArrayVec<[u8; lexer::NUMBER_LENGTH]>,
-    dir: &CardDir,
-    deg_split: usize,
-    abs_max: f64,
-) -> Result<f64, CoordinateParseError> {
-    // These checks is needed to ensure we don't panic
-    if !coord.is_ascii() {
-        return Err(CoordinateParseError::InvalidInput("found non ascii bytes"));
-    }
-    if deg_split > coord.len() {
-        return Err(CoordinateParseError::InvalidInput("input is too short"));
+        let (deg, dec_min) = coord.split_at(deg_split);
+        let degrees = f64::from(i8::from_str(str::from_utf8(deg)?)?);
+        let decimal_min = fl_as_f64(dec_min)? * 10.0 / 6.0 / 100.0;
+        let dec_deg = degrees + decimal_min;
+        if dec_deg.abs() > abs_max {
+            return Err(ParseError::InvalidCoord(dec_deg, abs_max));
+        }
+        Ok(dec_deg * dir.get_sign() as f64)
     }
 
-    let (deg, dec_min) = coord.split_at(deg_split);
-    // unwrap can be used since we know that lat is only valid ascii
-    let degrees = f64::from(i8::from_str(str::from_utf8(deg).unwrap())?);
-    let decimal_min = f64::from_str(str::from_utf8(dec_min).unwrap())? * 10.0 / 6.0 / 100.0;
-    let dec_deg = degrees + decimal_min;
-    if dec_deg.abs() > abs_max {
-        return Err(CoordinateParseError::InvalidCoord(dec_deg, abs_max));
+    /// Converts the data of a `TokenKind::FloatLiteral` to a time.
+    /// The input has to be in the format `hhmmss.sss`.
+    #[inline]
+    fn fl_to_utc(utc: &[u8]) -> Result<NaiveTime, ParseError> {
+        Ok(NaiveTime::parse_from_str(
+            str::from_utf8(&utc)?,
+            "%H%M%S%.f",
+        )?)
     }
-    Ok(dec_deg * dir.get_sign() as f64)
+}
+
+#[inline]
+fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
+    Ok(f64::from_str(str::from_utf8(fl)?)?)
 }

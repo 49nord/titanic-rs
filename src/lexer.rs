@@ -167,13 +167,10 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                         return Some(Ok(Token::new(TokenKind::FloatLiteral(buf))));
                     }
                 }
+
                 // we got an integer
-                // we know we only have valid ascii characters
-                let string = str::from_utf8(&buf).unwrap();
-                let int = match i64::from_str(string) {
-                    Ok(i) => i,
-                    Err(e) => return Some(Err(e.into())),
-                };
+                let string = try_err!(str::from_utf8(&buf));
+                let int = try_err!(i64::from_str(string));
                 Some(Ok(Token::new(TokenKind::IntLiteral(int))))
             }
             Some(c) if c == b',' => {
@@ -209,11 +206,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     try_some!(self.advance());
                 }
 
-                // we know only ascii hexdigits are in buf
-                let expected_sum = match u8::from_str_radix(str::from_utf8(&buf).unwrap(), 16) {
-                    Ok(i) => i,
-                    Err(e) => return Some(Err(e.into())),
-                };
+                let expected_sum = try_err!(u8::from_str_radix(try_err!(str::from_utf8(&buf)), 16));
                 if expected_sum ^ actual_sum != 0 {
                     return Some(Err((expected_sum, actual_sum).into()));
                 }

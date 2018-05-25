@@ -9,6 +9,16 @@ macro_rules! try_some {
     };
 }
 
+#[macro_export]
+macro_rules! try_err {
+    ($expr:expr) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) => return Some(Err(From::from(e))),
+        }
+    };
+}
+
 // TODO: Document more what is happening and how to use it.
 #[macro_export]
 macro_rules! accept {
