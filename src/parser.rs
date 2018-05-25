@@ -85,6 +85,9 @@ pub struct GgaSentence {
     /// Geoidal separation, the difference between the WGS-84 earth ellipsoid
     /// and mean-sea-level (geoid), "-" means mean-sea-level below ellipsoid
     geo_sep: Option<f64>,
+    /// Age of differential GPS data, time in seconds since last SC104 type
+    /// 1 or 9 update, null field when DGPS is not used
+    age: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -193,6 +196,19 @@ impl<R: io::Read> GgaParser<R> {
         self.expect_meters()?;
         expect!(self, CommaSeparator)?;
 
+        // Parse age of differential GPS data seconds
+        let age = match accept!(self, FloatLiteral, f)? {
+            Some(f) => {
+                let f = fl_as_f64(f.as_slice())?;
+                if f < 0.0 {
+                    return Err(ParseError::InvalidInput("data age cannot be negative"));
+                }
+                Some(f)
+            }
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+
         Ok(Some(GgaSentence {
             talker_id,
             utc,
@@ -203,6 +219,7 @@ impl<R: io::Read> GgaParser<R> {
             hdop,
             altitude,
             geo_sep,
+            age,
         }))
     }
 
