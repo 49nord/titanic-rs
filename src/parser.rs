@@ -88,6 +88,8 @@ pub struct GgaSentence {
     /// Age of differential GPS data, time in seconds since last SC104 type
     /// 1 or 9 update, null field when DGPS is not used
     age: Option<f64>,
+    /// Differential reference station ID, 0000-1023
+    station_id: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -209,6 +211,18 @@ impl<R: io::Read> GgaParser<R> {
         };
         expect!(self, CommaSeparator)?;
 
+        // Parse differential reference station id
+        let station_id = match accept!(self, IntLiteral, i)? {
+            // casting is possible since we know i is in range 0..=1023
+            Some(i) if 0 <= i && i <= 1023 => Some(i as u32),
+            Some(i) => {
+                return Err(ParseError::InvalidInput(
+                    "station_id must be in range 0-1023",
+                ))
+            }
+            None => None,
+        };
+
         Ok(Some(GgaSentence {
             talker_id,
             utc,
@@ -220,6 +234,7 @@ impl<R: io::Read> GgaParser<R> {
             altitude,
             geo_sep,
             age,
+            station_id,
         }))
     }
 
