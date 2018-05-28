@@ -45,6 +45,13 @@ impl Token {
     pub fn new(kind: TokenKind) -> Self {
         Token { kind }
     }
+
+    pub fn is_header(&self) -> bool {
+        if let TokenKind::Header(_) = self.kind {
+            return true;
+        }
+        false
+    }
 }
 
 #[derive(Debug)]

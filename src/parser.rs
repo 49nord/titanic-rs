@@ -5,7 +5,7 @@ use chrono::NaiveTime;
 use std::str::{self, FromStr};
 use std::{io, iter};
 
-use err::ParseError;
+use err::{LexError, ParseError};
 use lexer::{self, Token, TokenKind};
 
 const LAT_SPLIT: usize = 2;
@@ -265,9 +265,18 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
     /// Nothing will happen if the next token already is a header.
-    /// Returns `Ok(None)` if the next call of `next()` will return `None`.
-    pub fn jump_to_header(&mut self) -> Result<Option<()>, io::Error> {
-        Ok(None)
+    /// Returns `None` if EOF has been reached.
+    pub fn jump_to_header(&mut self) -> Option<Result<(), io::Error>> {
+        loop {
+            match self.lexer.peek() {
+                Some(Ok(v)) if v.is_header() => return Some(Ok(())),
+                Some(_) => (),
+                None => return None,
+            }
+            if let Some(Err(LexError::Io(e))) = self.lexer.next() {
+                return Some(Err(e));
+            }
+        }
     }
 
     /// Parse `coord` as a f64 representing a coordinate.
