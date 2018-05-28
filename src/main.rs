@@ -6,10 +6,10 @@ extern crate chrono;
 #[macro_use]
 extern crate quick_error;
 
-mod err;
+pub mod err;
 #[macro_use]
 mod macros;
 mod lexer;
-mod parser;
+pub mod parser;
 
 fn main() {}

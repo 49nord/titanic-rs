@@ -1,3 +1,6 @@
+//! This module provides a parser for the *GGA* sentence of the*NMEA 0183*
+//! protocol.
+
 use chrono::NaiveTime;
 use std::str::{self, FromStr};
 use std::{io, iter};
@@ -10,8 +13,9 @@ const ABS_MAX_LAT: f64 = 90.0;
 const LONG_SPLIT: usize = 3;
 const ABS_MAX_LONG: f64 = 180.0;
 
+/// The cardinal directions.
 #[derive(Debug)]
-pub enum CardDir {
+enum CardDir {
     North,
     South,
     East,
@@ -28,6 +32,7 @@ impl CardDir {
     }
 }
 
+/// Indicator of the quality of gps data.
 #[derive(Debug)]
 pub enum GpsQualityInd {
     FixNotAvailable,
@@ -44,6 +49,7 @@ pub enum GpsQualityInd {
 impl GpsQualityInd {
     /// Takes an integer in the range `0..=8` and returns the corresponding
     /// `GpsQualityInd`.
+    /// Else `ParseError::UnexpectedToken` is returned.
     #[inline]
     fn try_from_i64(int: i64) -> Result<Self, ParseError> {
         match int {
@@ -61,49 +67,57 @@ impl GpsQualityInd {
     }
 }
 
+/// This represents a correct GGA sentence and can be created by a
+/// [GgaParser](../parser/struct.GgaParser.html)
 #[derive(Debug)]
 pub struct GgaSentence {
-    talker_id: [u8; lexer::HEADER_LENGTH],
+    /// Talker id contained in the header of every sentence.
+    pub talker_id: [u8; lexer::HEADER_LENGTH],
     /// Universal Time Coordinated (UTC)
-    utc: NaiveTime,
+    pub utc: NaiveTime,
     /// Latitude in decimal degrees.
     /// A positive value indicates that the coordinate is in the northern hemisphere.
     /// A negative value indicates that the coordinate is in the southern hemisphere.
-    lat: Option<f64>,
+    pub lat: Option<f64>,
     /// Longitude in decimal degrees.
     /// A positive value indicates that the coordinate is in the eastern hemisphere.
     /// A negative value indicates that the coordinate is in the western hemisphere.
-    long: Option<f64>,
+    pub long: Option<f64>,
     /// Indicates the quality of the gps data.
-    gps_qlty: GpsQualityInd,
+    pub gps_qlty: GpsQualityInd,
     /// Number of satellites in view.
-    sat_view: u64,
+    pub sat_view: u64,
     /// Horizontal dilution of precision (meters)
-    hdop: Option<f64>,
+    pub hdop: Option<f64>,
     /// Antenna Altitude above/below mean-sea-level (geoid) (in meters)
-    altitude: Option<f64>,
+    pub altitude: Option<f64>,
     /// Geoidal separation, the difference between the WGS-84 earth ellipsoid
     /// and mean-sea-level (geoid), "-" means mean-sea-level below ellipsoid
-    geo_sep: Option<f64>,
+    pub geo_sep: Option<f64>,
     /// Age of differential GPS data, time in seconds since last SC104 type
     /// 1 or 9 update, null field when DGPS is not used
-    age: Option<f64>,
+    pub age: Option<f64>,
     /// Differential reference station ID, 0000-1023
-    station_id: Option<u32>,
+    pub station_id: Option<u32>,
 }
 
+/// The parser for the `NMEA 0183` protocol that parses only GGA sentences.
 #[derive(Debug)]
 pub struct GgaParser<R: io::Read> {
     lexer: iter::Peekable<lexer::Tokenizer<R>>,
 }
 
 impl<R: io::Read> GgaParser<R> {
+    /// Create a new parser that parses `input`.
     pub fn new(input: R) -> Result<Self, io::Error> {
         Ok(GgaParser {
             lexer: lexer::Tokenizer::new(input)?.peekable(),
         })
     }
 
+    /// Read a sentence.
+    /// The first char has to `'$'`. Returns `ParseError::UnexpectedSentenceType`
+    /// if the sentence type is not GGA.
     pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
         let talker_id = expect!(self, Header, h)?;
         let sen_type = expect!(self, StringLiteral, s)?;
@@ -116,6 +130,8 @@ impl<R: io::Read> GgaParser<R> {
         }
     }
 
+    /// Parse a GGA sentence.
+    /// The comma before utc has to have already been consumed.
     fn parse_gga(
         &mut self,
         talker_id: [u8; lexer::HEADER_LENGTH],
@@ -168,7 +184,11 @@ impl<R: io::Read> GgaParser<R> {
 
         // Parse satellites in view
         let sat_view = match expect!(self, IntLiteral, i)? {
-            i if i < 0 => return Err(ParseError::SatInView(i)),
+            i if i < 0 => {
+                return Err(ParseError::InvalidValue(
+                    "number of satellites in view has to be >=0",
+                ))
+            }
             i => i as u64,
         };
         expect!(self, CommaSeparator)?;
@@ -203,7 +223,9 @@ impl<R: io::Read> GgaParser<R> {
             Some(f) => {
                 let f = fl_as_f64(f.as_slice())?;
                 if f < 0.0 {
-                    return Err(ParseError::InvalidInput("data age cannot be negative"));
+                    return Err(ParseError::InvalidValue(
+                        "age of the data cannot be negative",
+                    ));
                 }
                 Some(f)
             }
@@ -216,8 +238,8 @@ impl<R: io::Read> GgaParser<R> {
             // casting is possible since we know i is in range 0..=1023
             Some(i) if 0 <= i && i <= 1023 => Some(i as u32),
             Some(_) => {
-                return Err(ParseError::InvalidInput(
-                    "station_id must be in range 0-1023",
+                return Err(ParseError::InvalidValue(
+                    "station_id must be between 0 and 1023",
                 ))
             }
             None => None,
@@ -241,6 +263,17 @@ impl<R: io::Read> GgaParser<R> {
         }))
     }
 
+    /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
+    /// Nothing will happen if the next token already is a header.
+    /// Returns `Ok(None)` if the next call of `next()` will return `None`.
+    pub fn jump_to_header(&mut self) -> Result<Option<()>, io::Error> {
+        Ok(None)
+    }
+
+    /// Parse `coord` as a f64 representing a coordinate.
+    /// `dir` will be converted to 1 or -1 to be multiplied with the degrees.
+    /// `deg_split` is the number of numbers that make up the degrees.
+    /// `abs_max` is maximum value in degree, e.g. 180 for longitude.
     fn parse_coord(
         coord: &[u8],
         dir: &CardDir,
@@ -249,7 +282,9 @@ impl<R: io::Read> GgaParser<R> {
     ) -> Result<f64, ParseError> {
         // This check is needed to ensure we don't panic
         if deg_split > coord.len() {
-            return Err(ParseError::InvalidInput("input is too short"));
+            return Err(ParseError::InvalidValue(
+                "the float is too short for a coordinate",
+            ));
         }
 
         let (deg, dec_min) = coord.split_at(deg_split);
