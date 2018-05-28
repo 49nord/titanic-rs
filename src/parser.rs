@@ -215,13 +215,16 @@ impl<R: io::Read> GgaParser<R> {
         let station_id = match accept!(self, IntLiteral, i)? {
             // casting is possible since we know i is in range 0..=1023
             Some(i) if 0 <= i && i <= 1023 => Some(i as u32),
-            Some(i) => {
+            Some(_) => {
                 return Err(ParseError::InvalidInput(
                     "station_id must be in range 0-1023",
                 ))
             }
             None => None,
         };
+
+        // Parse Checksum
+        expect!(self, Checksum, c)?;
 
         Ok(Some(GgaSentence {
             talker_id,

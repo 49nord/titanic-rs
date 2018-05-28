@@ -21,10 +21,6 @@ quick_error! {
             description("Unexpected sentence type")
             display("Encountered unexpected sentence type")
         }
-        Incomplete {
-            description("Incomplete sentence")
-            display("Could not complete the sentence due to EOF")
-        }
         Time(err: chrono::format::ParseError) {
             from()
             description("Time parsing error")
