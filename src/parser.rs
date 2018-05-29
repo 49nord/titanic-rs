@@ -1,12 +1,13 @@
 //! This module provides a parser for the *GGA* sentence of the*NMEA 0183*
 //! protocol.
 
+use arrayvec::ArrayVec;
 use chrono::NaiveTime;
 use std::str::{self, FromStr};
 use std::{io, iter};
 
 use err::{LexError, ParseError};
-use lexer::{self, Token, TokenKind};
+use lexer;
 
 const LAT_SPLIT: usize = 2;
 const ABS_MAX_LAT: f64 = 90.0;
@@ -116,11 +117,11 @@ impl<R: io::Read> GgaParser<R> {
     }
 
     /// Read a sentence.
-    /// The first char has to `'$'`. Returns `ParseError::UnexpectedSentenceType`
+    /// The first char has to be `'$'`. Returns `ParseError::UnexpectedSentenceType`
     /// if the sentence type is not GGA.
     pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
-        let talker_id = expect!(self, Header, h)?;
-        let sen_type = expect!(self, StringLiteral, s)?;
+        let talker_id = self.expect_header()?;
+        let sen_type = self.expect_sen_type()?;
         match sen_type.as_slice() {
             b"GGA" => {
                 expect!(self, CommaSeparator)?;
@@ -211,6 +212,19 @@ impl<R: io::Read> GgaParser<R> {
                 return Some(Err(e));
             }
         }
+    }
+
+    /// Expect the next token to be a header.
+    /// The expected format is `$xx`.
+    #[inline]
+    fn expect_header(&mut self) -> Result<[u8; 2], ParseError> {
+        expect!(self, Header, h)
+    }
+
+    /// Expect the next token to represent the sentence type.
+    #[inline]
+    fn expect_sen_type(&mut self) -> Result<ArrayVec<[u8; 64]>, ParseError> {
+        expect!(self, StringLiteral, s)
     }
 
     /// Expect the next token to represent utc.
@@ -338,17 +352,15 @@ impl<R: io::Read> GgaParser<R> {
         match accept!(self, IntLiteral, i)? {
             // casting is possible since we know i is in range 0..=1023
             Some(i) if 0 <= i && i <= 1023 => Ok(Some(i as u32)),
-            Some(_) => {
-                return Err(ParseError::InvalidValue(
-                    "station_id must be between 0 and 1023",
-                ))
-            }
+            Some(_) => Err(ParseError::InvalidValue(
+                "station_id must be between 0 and 1023",
+            )),
             None => Ok(None),
         }
     }
 
     /// Parse `coord` as a f64 representing a coordinate.
-    /// `dir` will be converted to 1 or -1 to be multiplied with the degrees.
+    /// The coordinate will be multiplied by 1 or -1 depending on the direction.
     /// `deg_split` is the number of numbers that make up the degrees.
     /// `abs_max` is maximum value in degree, e.g. 180 for longitude.
     fn parse_coord(
@@ -388,4 +400,65 @@ impl<R: io::Read> GgaParser<R> {
 #[inline]
 fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
     Ok(f64::from_str(str::from_utf8(fl)?)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CardDir, GgaParser, GgaSentence, GpsQualityInd, ParseError};
+    use std::io::Cursor;
+
+    fn t_parser(arg: &str) -> GgaParser<Cursor<&str>> {
+        GgaParser::new(Cursor::new(arg)).unwrap()
+    }
+
+    fn str_array_vec(vec: Vec<u8>) -> ::arrayvec::ArrayVec<[u8; ::lexer::STRING_LENGTH]> {
+        let mut av = ::arrayvec::ArrayVec::<[u8; ::lexer::STRING_LENGTH]>::new();
+        for v in vec {
+            av.push(v);
+        }
+        av
+    }
+
+    #[test]
+    fn expect_methods_on_empty() {
+        let mut parser = t_parser("");
+        assert_matches!(parser.expect_header(), Err(ParseError::UnexpectedToken));
+        assert_matches!(parser.expect_sen_type(), Err(ParseError::UnexpectedToken));
+        assert_matches!(parser.expect_utc(), Err(ParseError::UnexpectedToken));
+        assert_matches!(parser.expect_qual_ind(), Err(ParseError::UnexpectedToken));
+        assert_matches!(
+            parser.expect_sat_in_view(),
+            Err(ParseError::UnexpectedToken)
+        );
+    }
+
+    #[test]
+    fn accept_methods_on_empty() {
+        let mut parser = t_parser("");
+        assert_matches!(parser.accept_age(), Ok(None));
+        assert_matches!(parser.accept_altitude(), Ok(None));
+        assert_matches!(parser.accept_geo_sep(), Ok(None));
+        assert_matches!(parser.accept_hdop(), Ok(None));
+        assert_matches!(parser.accept_lat(), Err(ParseError::UnexpectedToken));
+        assert_matches!(parser.accept_long(), Err(ParseError::UnexpectedToken));
+        assert_matches!(parser.accept_station_id(), Ok(None));
+    }
+
+    mod header {
+        use super::{t_parser, ParseError};
+
+        #[test]
+        fn header_ok() {
+            let mut parser = t_parser("$GP");
+            assert_matches!(parser.expect_header(), Ok([b'G', b'P']));
+            assert_matches!(parser.lexer.next(), None);
+        }
+
+        #[test]
+        fn header_too_short() {
+            let mut parser = t_parser("$a");
+            assert_matches!(parser.expect_header(), Err(ParseError::Lexer(_)));
+            assert_matches!(parser.lexer.next(), None);
+        }
+    }
 }

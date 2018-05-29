@@ -56,12 +56,12 @@ macro_rules! try_err {
 macro_rules! accept {
     ($parser:expr, $toktype:ident) => {
         match $parser.lexer.peek() {
-            Some(Ok(Token {
-                kind: TokenKind::$toktype,
+            Some(Ok(::lexer::Token {
+                kind: ::lexer::TokenKind::$toktype,
                 ..
             })) => {
                 $parser.lexer.next();
-                Ok(Some(TokenKind::$toktype))
+                Ok(Some(::lexer::TokenKind::$toktype))
             }
             Some(&Err(_)) => {
                 if let Some(Err(e)) = $parser.lexer.next() {
@@ -76,12 +76,12 @@ macro_rules! accept {
 
     ($parser:expr, $toktype:ident, $tokdata:ident) => {
         match $parser.lexer.peek() {
-            Some(Ok(Token {
-                kind: TokenKind::$toktype(_),
+            Some(Ok(::lexer::Token {
+                kind: ::lexer::TokenKind::$toktype(_),
                 ..
             })) => {
-                if let Some(Ok(Token {
-                    kind: TokenKind::$toktype($tokdata),
+                if let Some(Ok(::lexer::Token {
+                    kind: ::lexer::TokenKind::$toktype($tokdata),
                     ..
                 })) = $parser.lexer.next()
                 {
@@ -128,14 +128,14 @@ macro_rules! expect {
     ($parser:expr, $toktype:ident) => {
         match accept!($parser, $toktype) {
             Ok(Some(t)) => Ok(t),
-            Ok(None) => Err(ParseError::UnexpectedToken),
+            Ok(None) => Err(::err::ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
         }
     };
     ($parser:expr, $toktype:ident, $tokdata:ident) => {
         match accept!($parser, $toktype, $tokdata) {
             Ok(Some(t)) => Ok(t),
-            Ok(None) => Err(ParseError::UnexpectedToken),
+            Ok(None) => Err(::err::ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
         }
     };
