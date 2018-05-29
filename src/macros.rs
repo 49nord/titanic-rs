@@ -31,20 +31,39 @@ macro_rules! try_err {
     };
 }
 
-// TODO: Document more what is happening and how to use it.
+/// Accept only the given `TokenKind`.
+///
+/// The first arg has to have an accessible field `lexer: iter::Peekable<_>`.
+/// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
+/// If the variant contains data, a third arg is needed and can be any indent.
+///
+/// `Ok(Some(TokenKind))` is returned if it is the correct token.
+/// `Ok(None)` is returned if another token is found.
+/// If an error is found, it will be returned.
+///
+/// ```rust
+/// // In a method of GgaParser wrapping ",doc*"
+/// assert_eq!(accept!(self, CommaSeparator), Ok(Some(TokenKind::CommaSeparator)));
+/// assert_eq!(accept!(self, CommaSeparator), Ok(None));
+/// match accept!(self, StringLiteral, s) {
+///     Ok(Some(TokenKind::StringLiteral(s))) => assert_eq!(s.len(), 3),
+///     _ => unreachable!(),
+/// }
+/// assert!(accept!(self, Checksum, c).is_err());
+/// ```
 #[macro_export]
 macro_rules! accept {
-    ($self:expr, $toktype:ident) => {
-        match $self.lexer.peek() {
+    ($parser:expr, $toktype:ident) => {
+        match $parser.lexer.peek() {
             Some(Ok(Token {
                 kind: TokenKind::$toktype,
                 ..
             })) => {
-                $self.lexer.next();
+                $parser.lexer.next();
                 Ok(Some(TokenKind::$toktype))
             }
             Some(&Err(_)) => {
-                if let Some(Err(e)) = $self.lexer.next() {
+                if let Some(Err(e)) = $parser.lexer.next() {
                     Err(e)
                 } else {
                     unreachable!()
@@ -54,8 +73,8 @@ macro_rules! accept {
         }
     };
 
-    ($self:expr, $toktype:ident, $tokdata:ident) => {
-        match $self.lexer.peek() {
+    ($parser:expr, $toktype:ident, $tokdata:ident) => {
+        match $parser.lexer.peek() {
             Some(Ok(Token {
                 kind: TokenKind::$toktype(_),
                 ..
@@ -63,7 +82,7 @@ macro_rules! accept {
                 if let Some(Ok(Token {
                     kind: TokenKind::$toktype($tokdata),
                     ..
-                })) = $self.lexer.next()
+                })) = $parser.lexer.next()
                 {
                     Ok(Some($tokdata))
                 } else {
@@ -71,7 +90,7 @@ macro_rules! accept {
                 }
             }
             Some(&Err(_)) => {
-                if let Some(Err(e)) = $self.lexer.next() {
+                if let Some(Err(e)) = $parser.lexer.next() {
                     Err(e)
                 } else {
                     unreachable!()
@@ -82,17 +101,25 @@ macro_rules! accept {
     };
 }
 
+/// Expect the given `TokenKind`.
+///
+/// The first arg has to be a parser with an accessible field `lexer`.
+/// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
+/// If the variant contains data, a third arg is needed and can be any indent.
+///
+/// accept!() is called and Ok(None) is converted to
+/// `Err(ParseError::UnexpectedToken)`.
 #[macro_export]
 macro_rules! expect {
-    ($self:expr, $toktype:ident) => {
-        match accept!($self, $toktype) {
+    ($parser:expr, $toktype:ident) => {
+        match accept!($parser, $toktype) {
             Ok(Some(t)) => Ok(t),
             Ok(None) => Err(ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
         }
     };
-    ($self:expr, $toktype:ident, $tokdata:ident) => {
-        match accept!($self, $toktype, $tokdata) {
+    ($parser:expr, $toktype:ident, $tokdata:ident) => {
+        match accept!($parser, $toktype, $tokdata) {
             Ok(Some(t)) => Ok(t),
             Ok(None) => Err(ParseError::UnexpectedToken),
             Err(e) => Err(e.into()),
