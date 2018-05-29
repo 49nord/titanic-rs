@@ -136,8 +136,6 @@ impl<R: io::Read> GgaParser<R> {
         &mut self,
         talker_id: [u8; lexer::HEADER_LENGTH],
     ) -> Result<Option<GgaSentence>, ParseError> {
-        // TODO: Clarify if commas should be ignored
-
         // Parse utc
         let utc = Self::fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
         expect!(self, CommaSeparator)?;

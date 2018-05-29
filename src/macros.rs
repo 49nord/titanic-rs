@@ -107,12 +107,12 @@ macro_rules! accept {
 /// The first arg has to be a parser with an accessible field `lexer`.
 /// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
 /// If the variant contains data, a third arg is needed and can be any indent.
-/// 
+///
 /// `Ok(TokenKind)` is returned if it is the correct token without data.
 /// `Ok(data)` is returned if it is the correct token with data.
 /// `Err(ParseError::UnexpectedToken)` is returned if another token is found.
 /// If an error is found, it will be returned.
-/// 
+///
 /// ```rust
 /// // In a method of GgaParser wrapping ",doc*"
 /// assert_eq!(expect!(self, CommaSeparator), Ok(TokenKind::CommaSeparator));
