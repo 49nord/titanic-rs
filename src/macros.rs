@@ -37,7 +37,8 @@ macro_rules! try_err {
 /// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
 /// If the variant contains data, a third arg is needed and can be any indent.
 ///
-/// `Ok(Some(TokenKind))` is returned if it is the correct token.
+/// `Ok(Some(TokenKind))` is returned if it is the correct token without data.
+/// `Ok(Some(data))` is returned if it is the correct token with data.
 /// `Ok(None)` is returned if another token is found.
 /// If an error is found, it will be returned.
 ///
@@ -46,7 +47,7 @@ macro_rules! try_err {
 /// assert_eq!(accept!(self, CommaSeparator), Ok(Some(TokenKind::CommaSeparator)));
 /// assert_eq!(accept!(self, CommaSeparator), Ok(None));
 /// match accept!(self, StringLiteral, s) {
-///     Ok(Some(TokenKind::StringLiteral(s))) => assert_eq!(s.len(), 3),
+///     Ok(Some(s)) => assert_eq!(s.len(), 3),
 ///     _ => unreachable!(),
 /// }
 /// assert!(accept!(self, Checksum, c).is_err());
@@ -106,9 +107,22 @@ macro_rules! accept {
 /// The first arg has to be a parser with an accessible field `lexer`.
 /// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
 /// If the variant contains data, a third arg is needed and can be any indent.
-///
-/// accept!() is called and Ok(None) is converted to
-/// `Err(ParseError::UnexpectedToken)`.
+/// 
+/// `Ok(TokenKind)` is returned if it is the correct token without data.
+/// `Ok(data)` is returned if it is the correct token with data.
+/// `Err(ParseError::UnexpectedToken)` is returned if another token is found.
+/// If an error is found, it will be returned.
+/// 
+/// ```rust
+/// // In a method of GgaParser wrapping ",doc*"
+/// assert_eq!(expect!(self, CommaSeparator), Ok(TokenKind::CommaSeparator));
+/// assert_eq!(expect!(self, CommaSeparator), Err(ParseError::UnexpectedToken));
+/// match expect!(self, StringLiteral, s) {
+///     Ok(s) => assert_eq!(s.len(), 3),
+///     _ => unreachable!(),
+/// }
+/// assert!(expect!(self, Checksum, c).is_err());
+/// ```
 #[macro_export]
 macro_rules! expect {
     ($parser:expr, $toktype:ident) => {
