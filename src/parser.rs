@@ -137,111 +137,47 @@ impl<R: io::Read> GgaParser<R> {
         talker_id: [u8; lexer::HEADER_LENGTH],
     ) -> Result<Option<GgaSentence>, ParseError> {
         // Parse utc
-        let utc = Self::fl_to_utc(&expect!(self, FloatLiteral, f)?)?;
+        let utc = self.expect_utc()?;
         expect!(self, CommaSeparator)?;
 
         // Parse latitude
-        let lat = match accept!(self, FloatLiteral, f)? {
-            Some(f) => Some(f),
-            None => None,
-        };
-        expect!(self, CommaSeparator)?;
-        let lat_dir = match accept!(self, StringLiteral, s)? {
-            Some(ref s) if s.as_slice() == b"N" => Some(CardDir::North),
-            Some(ref s) if s.as_slice() == b"S" => Some(CardDir::South),
-            Some(s) => return Err(ParseError::InvalidDir(s)),
-            None => None,
-        };
-        let lat = match (lat, lat_dir) {
-            (Some(lat), Some(d)) => Some(Self::parse_coord(&lat, &d, LAT_SPLIT, ABS_MAX_LAT)?),
-            (_, _) => None,
-        };
+        let lat = self.accept_lat()?;
         expect!(self, CommaSeparator)?;
 
         // Parse longitude
-        let long = match accept!(self, FloatLiteral, f)? {
-            Some(f) => Some(f),
-            None => None,
-        };
-        expect!(self, CommaSeparator)?;
-        let long_dir = match accept!(self, StringLiteral, s)? {
-            Some(ref s) if s.as_slice() == b"E" => Some(CardDir::East),
-            Some(ref s) if s.as_slice() == b"W" => Some(CardDir::West),
-            Some(s) => return Err(ParseError::InvalidDir(s)),
-            None => None,
-        };
-        let long = match (long, long_dir) {
-            (Some(long), Some(d)) => Some(Self::parse_coord(&long, &d, LONG_SPLIT, ABS_MAX_LONG)?),
-            (_, _) => None,
-        };
+        let long = self.accept_long()?;
         expect!(self, CommaSeparator)?;
 
         // Parse quality indicator
-        let gps_qlty = GpsQualityInd::try_from_i64(expect!(self, IntLiteral, i)?)?;
+        let gps_qlty = self.expect_qual_ind()?;
         expect!(self, CommaSeparator)?;
 
         // Parse satellites in view
-        let sat_view = match expect!(self, IntLiteral, i)? {
-            i if i < 0 => {
-                return Err(ParseError::InvalidValue(
-                    "number of satellites in view has to be >=0",
-                ))
-            }
-            i => i as u64,
-        };
+        let sat_view = self.expect_sat_in_view()?;
         expect!(self, CommaSeparator)?;
 
         // Parse horizontal dilution of precision
-        let hdop = match accept!(self, FloatLiteral, f)? {
-            Some(f) => Some(fl_as_f64(f.as_slice())?),
-            None => None,
-        };
+        let hdop = self.accept_hdop()?;
         expect!(self, CommaSeparator)?;
 
-        // Parse antenna altitude and check if the unit is meter
-        let altitude = match accept!(self, FloatLiteral, f)? {
-            Some(f) => Some(fl_as_f64(f.as_slice())?),
-            None => None,
-        };
+        // Parse antenna altitude
+        let altitude = self.accept_altitude()?;
         expect!(self, CommaSeparator)?;
         self.expect_meters()?;
         expect!(self, CommaSeparator)?;
 
-        // Parse geoidal separation and check if the unit is meter
-        let geo_sep = match accept!(self, FloatLiteral, f)? {
-            Some(f) => Some(fl_as_f64(f.as_slice())?),
-            None => None,
-        };
+        // Parse geoidal separation
+        let geo_sep = self.accept_geo_sep()?;
         expect!(self, CommaSeparator)?;
         self.expect_meters()?;
         expect!(self, CommaSeparator)?;
 
-        // Parse age of differential GPS data seconds
-        let age = match accept!(self, FloatLiteral, f)? {
-            Some(f) => {
-                let f = fl_as_f64(f.as_slice())?;
-                if f < 0.0 {
-                    return Err(ParseError::InvalidValue(
-                        "age of the data cannot be negative",
-                    ));
-                }
-                Some(f)
-            }
-            None => None,
-        };
+        // Parse age of differential GPS data in seconds
+        let age = self.accept_age()?;
         expect!(self, CommaSeparator)?;
 
         // Parse differential reference station id
-        let station_id = match accept!(self, IntLiteral, i)? {
-            // casting is possible since we know i is in range 0..=1023
-            Some(i) if 0 <= i && i <= 1023 => Some(i as u32),
-            Some(_) => {
-                return Err(ParseError::InvalidValue(
-                    "station_id must be between 0 and 1023",
-                ))
-            }
-            None => None,
-        };
+        let station_id = self.accept_station_id()?;
 
         // Parse Checksum
         expect!(self, Checksum, c)?;
@@ -277,6 +213,140 @@ impl<R: io::Read> GgaParser<R> {
         }
     }
 
+    /// Expect the next token to represent utc.
+    /// The expected format is `hhmmss.sss`.
+    #[inline]
+    fn expect_utc(&mut self) -> Result<NaiveTime, ParseError> {
+        Ok(NaiveTime::parse_from_str(
+            str::from_utf8(&expect!(self, FloatLiteral, f)?)?,
+            "%H%M%S%.f",
+        )?)
+    }
+
+    /// Accept a latitude, set it to `None` if the number or the direction is empty.
+    /// The accepted format is a float with four digits before the comma,
+    /// followed by a comma and a `StringLiteral` containing 'N' or 'S'.
+    fn accept_lat(&mut self) -> Result<Option<f64>, ParseError> {
+        let raw_lat = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(f),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        let lat_dir = match accept!(self, StringLiteral, s)? {
+            Some(ref s) if s.as_slice() == b"N" => Some(CardDir::North),
+            Some(ref s) if s.as_slice() == b"S" => Some(CardDir::South),
+            Some(s) => return Err(ParseError::InvalidDir(s)),
+            None => None,
+        };
+        match (raw_lat, lat_dir) {
+            (Some(lat), Some(d)) => Ok(Some(Self::parse_coord(&lat, &d, LAT_SPLIT, ABS_MAX_LAT)?)),
+            (_, _) => Ok(None),
+        }
+    }
+
+    /// Accept a longitude, set it to `None` if the number or the direction is empty.
+    /// The accepted format is a float with five digits before the comma,
+    /// followed by a comma and a `StringLiteral` containing 'N' or 'S'.
+    fn accept_long(&mut self) -> Result<Option<f64>, ParseError> {
+        let raw_long = match accept!(self, FloatLiteral, f)? {
+            Some(f) => Some(f),
+            None => None,
+        };
+        expect!(self, CommaSeparator)?;
+        let long_dir = match accept!(self, StringLiteral, s)? {
+            Some(ref s) if s.as_slice() == b"E" => Some(CardDir::East),
+            Some(ref s) if s.as_slice() == b"W" => Some(CardDir::West),
+            Some(s) => return Err(ParseError::InvalidDir(s)),
+            None => None,
+        };
+        match (raw_long, long_dir) {
+            (Some(long), Some(d)) => Ok(Some(Self::parse_coord(
+                &long,
+                &d,
+                LONG_SPLIT,
+                ABS_MAX_LONG,
+            )?)),
+            (_, _) => Ok(None),
+        }
+    }
+
+    /// Expect the next token to represent a `GpsQualityInd`.
+    #[inline]
+    fn expect_qual_ind(&mut self) -> Result<GpsQualityInd, ParseError> {
+        GpsQualityInd::try_from_i64(expect!(self, IntLiteral, i)?)
+    }
+
+    /// Expect the next token to represent the number of sattelites in view
+    /// Returns `Err(ParseError::InvalidValue(_))` if the number is < 0.
+    #[inline]
+    fn expect_sat_in_view(&mut self) -> Result<u64, ParseError> {
+        match expect!(self, IntLiteral, i)? {
+            i if i < 0 => Err(ParseError::InvalidValue(
+                "number of satellites in view has to be >=0",
+            )),
+            i => Ok(i as u64),
+        }
+    }
+
+    /// Accept the next token as horizontal dilution of precision, set to `None` if the field is
+    /// empty.
+    #[inline]
+    fn accept_hdop(&mut self) -> Result<Option<f64>, ParseError> {
+        match accept!(self, FloatLiteral, f)? {
+            Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Accept the next token as antenna altitude, set to `None` if the field is empty.
+    #[inline]
+    fn accept_altitude(&mut self) -> Result<Option<f64>, ParseError> {
+        match accept!(self, FloatLiteral, f)? {
+            Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Accept the next token as geoidal separation, set to `None` if the field is empty.
+    #[inline]
+    fn accept_geo_sep(&mut self) -> Result<Option<f64>, ParseError> {
+        match accept!(self, FloatLiteral, f)? {
+            Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Accept the next token as age of the data in seconds, set to `None` if the field is empty.
+    fn accept_age(&mut self) -> Result<Option<f64>, ParseError> {
+        match accept!(self, FloatLiteral, f)? {
+            Some(f) => {
+                let f = fl_as_f64(f.as_slice())?;
+                if f < 0.0 {
+                    return Err(ParseError::InvalidValue(
+                        "age of the data cannot be negative",
+                    ));
+                }
+                Ok(Some(f))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Accept the next token as station id, set to `None` if the field is empty.
+    /// Returns `Err(ParseError::InvalidValue(_))` if the id is not between 0 and 1023 (inclusive).
+    fn accept_station_id(&mut self) -> Result<Option<u32>, ParseError> {
+        match accept!(self, IntLiteral, i)? {
+            // casting is possible since we know i is in range 0..=1023
+            Some(i) if 0 <= i && i <= 1023 => Ok(Some(i as u32)),
+            Some(_) => {
+                return Err(ParseError::InvalidValue(
+                    "station_id must be between 0 and 1023",
+                ))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Parse `coord` as a f64 representing a coordinate.
     /// `dir` will be converted to 1 or -1 to be multiplied with the degrees.
     /// `deg_split` is the number of numbers that make up the degrees.
@@ -302,16 +372,6 @@ impl<R: io::Read> GgaParser<R> {
             return Err(ParseError::InvalidCoord(dec_deg, abs_max));
         }
         Ok(dec_deg * dir.get_sign() as f64)
-    }
-
-    /// Converts the data of a `TokenKind::FloatLiteral` to a time.
-    /// The input has to be in the format `hhmmss.sss`.
-    #[inline]
-    fn fl_to_utc(utc: &[u8]) -> Result<NaiveTime, ParseError> {
-        Ok(NaiveTime::parse_from_str(
-            str::from_utf8(&utc)?,
-            "%H%M%S%.f",
-        )?)
     }
 
     /// Check if the next token is a `StringLiteral` with the value b'M'.
