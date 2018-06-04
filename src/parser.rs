@@ -33,7 +33,6 @@ impl CardDir {
     }
 }
 
-/// Indicator of the quality of gps data.
 #[derive(Debug)]
 pub enum GpsQualityInd {
     FixNotAvailable,
@@ -48,8 +47,7 @@ pub enum GpsQualityInd {
 }
 
 impl GpsQualityInd {
-    /// Takes an integer in the range `0..=8` and returns the corresponding
-    /// `GpsQualityInd`.
+    /// Takes an integer in the range `0..=8` and returns the corresponding `GpsQualityInd`.
     /// Else `ParseError::UnexpectedToken` is returned.
     #[inline]
     fn try_from_i64(int: i64) -> Result<Self, ParseError> {
@@ -253,7 +251,7 @@ impl<R: io::Read> GgaParser<R> {
             None => None,
         };
         match (raw_lat, lat_dir) {
-            (Some(lat), Some(d)) => Ok(Some(Self::parse_coord(&lat, &d, LAT_SPLIT, ABS_MAX_LAT)?)),
+            (Some(lat), Some(d)) => Ok(Some(parse_coord(&lat, &d, LAT_SPLIT, ABS_MAX_LAT)?)),
             (_, _) => Ok(None),
         }
     }
@@ -274,12 +272,7 @@ impl<R: io::Read> GgaParser<R> {
             None => None,
         };
         match (raw_long, long_dir) {
-            (Some(long), Some(d)) => Ok(Some(Self::parse_coord(
-                &long,
-                &d,
-                LONG_SPLIT,
-                ABS_MAX_LONG,
-            )?)),
+            (Some(long), Some(d)) => Ok(Some(parse_coord(&long, &d, LONG_SPLIT, ABS_MAX_LONG)?)),
             (_, _) => Ok(None),
         }
     }
@@ -359,33 +352,6 @@ impl<R: io::Read> GgaParser<R> {
         }
     }
 
-    /// Parse `coord` as a f64 representing a coordinate.
-    /// The coordinate will be multiplied by 1 or -1 depending on the direction.
-    /// `deg_split` is the number of numbers that make up the degrees.
-    /// `abs_max` is maximum value in degree, e.g. 180 for longitude.
-    fn parse_coord(
-        coord: &[u8],
-        dir: &CardDir,
-        deg_split: usize,
-        abs_max: f64,
-    ) -> Result<f64, ParseError> {
-        // This check is needed to ensure we don't panic
-        if deg_split > coord.len() {
-            return Err(ParseError::InvalidValue(
-                "the float is too short for a coordinate",
-            ));
-        }
-
-        let (deg, dec_min) = coord.split_at(deg_split);
-        let degrees = f64::from(i8::from_str(str::from_utf8(deg)?)?);
-        let decimal_min = fl_as_f64(dec_min)? * 10.0 / 6.0 / 100.0;
-        let dec_deg = degrees + decimal_min;
-        if dec_deg.abs() > abs_max {
-            return Err(ParseError::InvalidCoord(dec_deg, abs_max));
-        }
-        Ok(dec_deg * dir.get_sign() as f64)
-    }
-
     /// Check if the next token is a `StringLiteral` with the value b'M'.
     /// Else return an error.
     #[inline]
@@ -397,6 +363,36 @@ impl<R: io::Read> GgaParser<R> {
     }
 }
 
+/// Parse `coord` as a f64 representing a coordinate.
+/// The coordinate will be multiplied by 1 or -1 depending on the direction.
+/// `deg_split` is the number of digits that represent the degrees.
+/// `abs_max` is maximum value in degree, e.g. 180 for longitude.
+fn parse_coord(
+    coord: &[u8],
+    dir: &CardDir,
+    deg_split: usize,
+    abs_max: f64,
+) -> Result<f64, ParseError> {
+    // This check is needed to ensure we don't panic
+    if deg_split > coord.len() {
+        return Err(ParseError::InvalidValue(
+            "the float is too short for a coordinate",
+        ));
+    }
+
+    let (deg, dec_min) = coord.split_at(deg_split);
+    let degrees = f64::from(u8::from_str(str::from_utf8(deg)?)?);
+    if degrees < 0.0 {
+        return Err(ParseError::InvalidValue(""));
+    }
+    let decimal_min = fl_as_f64(dec_min)? * 10.0 / 6.0 / 100.0;
+    let dec_deg = degrees + decimal_min;
+    if dec_deg.abs() > abs_max {
+        return Err(ParseError::InvalidCoord(dec_deg, abs_max));
+    }
+    Ok(dec_deg * dir.get_sign() as f64)
+}
+
 #[inline]
 fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
     Ok(f64::from_str(str::from_utf8(fl)?)?)
@@ -404,7 +400,8 @@ fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CardDir, GgaParser, GgaSentence, GpsQualityInd, ParseError};
+    use super::{parse_coord, CardDir, GgaParser, GgaSentence, GpsQualityInd, ParseError};
+    use chrono::NaiveTime;
     use std::io::Cursor;
 
     fn t_parser(arg: &str) -> GgaParser<Cursor<&str>> {
@@ -444,21 +441,123 @@ mod tests {
         assert_matches!(parser.accept_station_id(), Ok(None));
     }
 
+    #[test]
+    fn direction_sign() {
+        assert_eq!(CardDir::North.get_sign(), 1);
+        assert_eq!(CardDir::East.get_sign(), 1);
+        assert_eq!(CardDir::South.get_sign(), -1);
+        assert_eq!(CardDir::West.get_sign(), -1);
+    }
+
+    #[test]
+    fn gps_quality_from_i64() {
+        assert_matches!(
+            GpsQualityInd::try_from_i64(-1),
+            Err(ParseError::UnexpectedToken)
+        );
+        assert_matches!(
+            GpsQualityInd::try_from_i64(0),
+            Ok(GpsQualityInd::FixNotAvailable)
+        );
+        assert_matches!(GpsQualityInd::try_from_i64(1), Ok(GpsQualityInd::GpsFix));
+        assert_matches!(
+            GpsQualityInd::try_from_i64(2),
+            Ok(GpsQualityInd::DifferentialGpsFix)
+        );
+        assert_matches!(GpsQualityInd::try_from_i64(3), Ok(GpsQualityInd::PpsFix));
+        assert_matches!(
+            GpsQualityInd::try_from_i64(4),
+            Ok(GpsQualityInd::RealTimeKinematic)
+        );
+        assert_matches!(GpsQualityInd::try_from_i64(5), Ok(GpsQualityInd::FloatRtk));
+        assert_matches!(GpsQualityInd::try_from_i64(6), Ok(GpsQualityInd::Estimated));
+        assert_matches!(
+            GpsQualityInd::try_from_i64(7),
+            Ok(GpsQualityInd::ManualInputMode)
+        );
+        assert_matches!(
+            GpsQualityInd::try_from_i64(8),
+            Ok(GpsQualityInd::SimulationMode)
+        );
+        assert_matches!(
+            GpsQualityInd::try_from_i64(9),
+            Err(ParseError::UnexpectedToken)
+        );
+    }
+
     mod header {
-        use super::{t_parser, ParseError};
+        use super::*;
 
         #[test]
-        fn header_ok() {
+        fn ok() {
             let mut parser = t_parser("$GP");
             assert_matches!(parser.expect_header(), Ok([b'G', b'P']));
             assert_matches!(parser.lexer.next(), None);
         }
 
         #[test]
-        fn header_too_short() {
+        fn too_short() {
             let mut parser = t_parser("$a");
             assert_matches!(parser.expect_header(), Err(ParseError::Lexer(_)));
             assert_matches!(parser.lexer.next(), None);
+        }
+    }
+
+    mod sentence_type {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("GGA");
+            let _expected = str_array_vec(vec![b'G', b'G', b'A']);
+            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+        }
+
+        #[test]
+        fn ok_long() {
+            let mut parser = t_parser("aaaaa");
+            let _expected = str_array_vec(vec![b'a', b'a', b'a', b'a', b'a']);
+            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+        }
+
+        #[test]
+        fn ok_short() {
+            let mut parser = t_parser("a");
+            let _expected = str_array_vec(vec![b'a']);
+            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+        }
+    }
+
+    mod utc {
+        use super::*;
+
+        #[test]
+        fn max() {
+            let mut parser = t_parser("235959.999999999");
+            assert_eq!(
+                parser.expect_utc().unwrap(),
+                NaiveTime::from_hms_nano(23, 59, 59, 999999999)
+            );
+        }
+
+        #[test]
+        fn min() {
+            let mut parser = t_parser("000000.0");
+            let left = parser.expect_utc();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), NaiveTime::from_hms(0, 0, 0));
+        }
+
+        #[test]
+        fn no_dot() {
+            let mut parser = t_parser("111111");
+            assert_matches!(parser.expect_utc(), Err(ParseError::UnexpectedToken));
+        }
+
+        #[test]
+        fn wrong_fmt() {
+            let mut parser = t_parser("1111111.11");
+            assert_matches!(parser.expect_utc(), Err(ParseError::Time(_)));
         }
     }
 }
