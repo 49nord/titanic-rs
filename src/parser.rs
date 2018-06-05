@@ -509,22 +509,28 @@ mod tests {
         #[test]
         fn ok() {
             let mut parser = t_parser("GGA");
-            let _expected = str_array_vec(vec![b'G', b'G', b'A']);
-            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+            let expected = str_array_vec(vec![b'G', b'G', b'A']);
+            let left = parser.expect_sen_type();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
         }
 
         #[test]
         fn ok_long() {
             let mut parser = t_parser("aaaaa");
-            let _expected = str_array_vec(vec![b'a', b'a', b'a', b'a', b'a']);
-            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+            let expected = str_array_vec(vec![b'a', b'a', b'a', b'a', b'a']);
+            let left = parser.expect_sen_type();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
         }
 
         #[test]
         fn ok_short() {
             let mut parser = t_parser("a");
-            let _expected = str_array_vec(vec![b'a']);
-            assert_matches!(parser.expect_sen_type(), Ok(_expected));
+            let expected = str_array_vec(vec![b'a']);
+            let left = parser.expect_sen_type();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
         }
     }
 

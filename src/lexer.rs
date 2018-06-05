@@ -290,26 +290,40 @@ mod tests {
 
         #[test]
         fn string_ok() {
-            let _expected = str_array_vec(vec![b'a', b'r', b'g']);
             let mut lexer = t_lexer("arg");
+            let expected = str_array_vec(vec![b'a', b'r', b'g']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_expected)
+                    kind: TokenKind::StringLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::StringLiteral(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
 
         #[test]
         fn stops_correctly() {
-            let _expected = str_array_vec(vec![b'a', b'r', b'g']);
             let mut lexer = t_lexer("arg.");
+            let expected = str_array_vec(vec![b'a', b'r', b'g']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_expected)
+                    kind: TokenKind::StringLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::StringLiteral(expected)
+                }
             );
             assert!(lexer.next().is_some());
         }
@@ -361,12 +375,19 @@ mod tests {
         #[test]
         fn positive_float() {
             let mut lexer = t_lexer("1.23");
-            let _expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_expected)
+                    kind: TokenKind::FloatLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::FloatLiteral(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
@@ -374,12 +395,19 @@ mod tests {
         #[test]
         fn negative_float() {
             let mut lexer = t_lexer("-1.23");
-            let _expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
+            let expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_expected)
+                    kind: TokenKind::FloatLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::FloatLiteral(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
@@ -387,12 +415,19 @@ mod tests {
         #[test]
         fn end_with_dot() {
             let mut lexer = t_lexer("-123.");
-            let _expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_expected)
+                    kind: TokenKind::FloatLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::FloatLiteral(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
@@ -400,12 +435,19 @@ mod tests {
         #[test]
         fn stops_correctly() {
             let mut lexer = t_lexer("1.23a");
-            let _expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_expected)
+                    kind: TokenKind::FloatLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::FloatLiteral(expected)
+                }
             );
             assert!(lexer.next().is_some());
         }
@@ -413,12 +455,19 @@ mod tests {
         #[test]
         fn negative_correct_stop_at_dot() {
             let mut lexer = t_lexer("-123.a");
-            let _expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_expected)
+                    kind: TokenKind::FloatLiteral(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::FloatLiteral(expected)
+                }
             );
             assert!(lexer.next().is_some());
         }
@@ -546,13 +595,20 @@ mod tests {
         #[test]
         fn not_a_hex() {
             let mut lexer = t_lexer("*Z5");
-            let _expected = str_array_vec(vec![b'Z']);
+            let expected = str_array_vec(vec![b'Z']);
             assert_matches!(lexer.next(), Some(Err(LexError::IncompleteToken(_))));
+            let string_lit = lexer.next();
             assert_matches!(
-                lexer.next(),
+                string_lit,
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_expected)
+                    kind: TokenKind::StringLiteral(_),
                 }))
+            );
+            assert_eq!(
+                string_lit.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::StringLiteral(expected)
+                }
             );
             assert_matches!(
                 lexer.next(),
@@ -577,26 +633,40 @@ mod tests {
 
         #[test]
         fn with_message() {
-            let _expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+            let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
             let mut lexer = t_lexer("test*16").skip(1);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::Checksum(_expected)
+                    kind: TokenKind::Checksum(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::Checksum(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
 
         #[test]
         fn reset_at_dollar() {
-            let _expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
+            let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
             let mut lexer = t_lexer("ab$test*16").skip(3);
+            let left = lexer.next();
             assert_matches!(
-                lexer.next(),
+                left,
                 Some(Ok(Token {
-                    kind: TokenKind::Checksum(_expected)
+                    kind: TokenKind::Checksum(_),
                 }))
+            );
+            assert_eq!(
+                left.unwrap().unwrap(),
+                Token {
+                    kind: TokenKind::Checksum(expected)
+                }
             );
             assert!(lexer.next().is_none());
         }
@@ -623,17 +693,16 @@ mod tests {
     mod nmea {
         use super::{float_array_vec, str_array_vec, t_lexer, LexError, Token, TokenKind};
 
-        const CORRECT_WO_LOCATION: &str = "$GPGGA,142013.087,,,,,0,0,,,M,,M,,*42";
-
+        // FIXME: This needs to be changed. The values aren't really checked.
         #[test]
         fn correct_wo_location() {
-            let mut lexer = t_lexer(CORRECT_WO_LOCATION);
+            let mut lexer = t_lexer("$GPGGA,142013.087,,,,,0,0,,,M,,M,,*42");
             let _header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
             let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
             let _comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
-                b'1', b'4', b'2', b'0', b'1', b'3', b'.', b'0', b'8', b'7'
+                b'1', b'4', b'2', b'0', b'1', b'3', b'.', b'0', b'8', b'7',
             ]);
             let _float_lit = Token::new(TokenKind::FloatLiteral(float));
             let _int_lit = Token::new(TokenKind::IntLiteral(0));
@@ -663,17 +732,15 @@ mod tests {
             assert_matches!(lexer.next(), Some(Ok(_checksum)));
         }
 
-        const INCORRECT_WO_LOCATION: &str = "$GPGGA,142018.087,,,,,0,0,,,,M,,M,,*43";
-
         #[test]
         fn incorrect_wo_location() {
-            let mut lexer = t_lexer(INCORRECT_WO_LOCATION);
+            let mut lexer = t_lexer("$GPGGA,142018.087,,,,,0,0,,,,M,,M,,*43");
             let _header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
             let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
             let _comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
-                b'1', b'4', b'2', b'0', b'1', b'8', b'.', b'0', b'8', b'7'
+                b'1', b'4', b'2', b'0', b'1', b'8', b'.', b'0', b'8', b'7',
             ]);
             let _float_lit = Token::new(TokenKind::FloatLiteral(float));
             let _int_lit = Token::new(TokenKind::IntLiteral(0));
