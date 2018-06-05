@@ -620,4 +620,101 @@ mod tests {
             assert_eq!(north, south * -1.0);
         }
     }
+
+    mod accept_lat {
+        use super::*;
+
+        #[test]
+        fn some_lat() {
+            let mut parser = t_parser("1612.369,N");
+            let left = parser.accept_lat();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(16.20615));
+        }
+
+        #[test]
+        fn negative_lat() {
+            let mut parser = t_parser("1612.369,S");
+            let left = parser.accept_lat();
+            println!("{:?}", left);
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(-16.20615));
+        }
+
+        #[test]
+        fn no_coordinate() {
+            let mut parser = t_parser(",N");
+            let left = parser.accept_lat();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn no_direction() {
+            let mut parser = t_parser("1612.369,");
+            let left = parser.accept_lat();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn no_coord_or_dir() {
+            let mut parser = t_parser(",");
+            let left = parser.accept_lat();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn wrong_direction() {
+            let mut parser = t_parser("01612.369,W");
+            let left = parser.accept_lat();
+            assert_matches!(left, Err(ParseError::UnexpectedDir(_)));
+        }
+    }
+
+    mod accept_long {
+        use super::*;
+
+        #[test]
+        fn some_long() {
+            let mut parser = t_parser("01612.369,E");
+            let left = parser.accept_long();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(16.20615));
+        }
+
+        #[test]
+        fn negative_long() {
+            let mut parser = t_parser("01612.369,W");
+            let left = parser.accept_long();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(-16.20615));
+        }
+
+        #[test]
+        fn no_coordinate() {
+            let mut parser = t_parser(",E");
+            let left = parser.accept_long();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn no_direction() {
+            let mut parser = t_parser("01612.369,");
+            let left = parser.accept_long();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn no_coord_or_dir() {
+            let mut parser = t_parser(",");
+            let left = parser.accept_long();
+            assert_matches!(left, Ok(None));
+        }
+
+        #[test]
+        fn wrong_direction() {
+            let mut parser = t_parser("01612.369,N");
+            let left = parser.accept_long();
+            assert_matches!(left, Err(ParseError::UnexpectedDir(_)));
+        }
+    }
 }
