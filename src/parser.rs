@@ -66,7 +66,7 @@ impl GpsQualityInd {
     }
 }
 
-/// This represents a correct GGA sentence and can be created by a
+/// This represents a correct GGA sentence and will usually be created by a
 /// [GgaParser](../parser/struct.GgaParser.html)
 #[derive(Debug)]
 pub struct GgaSentence {
@@ -289,7 +289,7 @@ impl<R: io::Read> GgaParser<R> {
     fn expect_sat_in_view(&mut self) -> Result<u64, ParseError> {
         match expect!(self, IntLiteral, i)? {
             i if i < 0 => Err(ParseError::InvalidValue(
-                "number of satellites in view has to be >=0",
+                "number of satellites in view has to be larger than or equal to 0",
             )),
             i => Ok(i as u64),
         }
@@ -492,14 +492,14 @@ mod tests {
         fn ok() {
             let mut parser = t_parser("$GP");
             assert_matches!(parser.expect_header(), Ok([b'G', b'P']));
-            assert_matches!(parser.lexer.next(), None);
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn too_short() {
             let mut parser = t_parser("$a");
             assert_matches!(parser.expect_header(), Err(ParseError::Lexer(_)));
-            assert_matches!(parser.lexer.next(), None);
+            assert!(parser.lexer.next().is_none());
         }
     }
 
@@ -630,6 +630,7 @@ mod tests {
             let left = parser.accept_lat();
             assert!(left.is_ok());
             assert_eq!(left.unwrap(), Some(16.20615));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -639,6 +640,7 @@ mod tests {
             println!("{:?}", left);
             assert!(left.is_ok());
             assert_eq!(left.unwrap(), Some(-16.20615));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -646,6 +648,7 @@ mod tests {
             let mut parser = t_parser(",N");
             let left = parser.accept_lat();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -653,6 +656,7 @@ mod tests {
             let mut parser = t_parser("1612.369,");
             let left = parser.accept_lat();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -660,6 +664,7 @@ mod tests {
             let mut parser = t_parser(",");
             let left = parser.accept_lat();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -667,6 +672,7 @@ mod tests {
             let mut parser = t_parser("01612.369,W");
             let left = parser.accept_lat();
             assert_matches!(left, Err(ParseError::UnexpectedDir(_)));
+            assert!(parser.lexer.next().is_none());
         }
     }
 
@@ -679,6 +685,7 @@ mod tests {
             let left = parser.accept_long();
             assert!(left.is_ok());
             assert_eq!(left.unwrap(), Some(16.20615));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -687,6 +694,7 @@ mod tests {
             let left = parser.accept_long();
             assert!(left.is_ok());
             assert_eq!(left.unwrap(), Some(-16.20615));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -694,6 +702,7 @@ mod tests {
             let mut parser = t_parser(",E");
             let left = parser.accept_long();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -701,6 +710,7 @@ mod tests {
             let mut parser = t_parser("01612.369,");
             let left = parser.accept_long();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -708,6 +718,7 @@ mod tests {
             let mut parser = t_parser(",");
             let left = parser.accept_long();
             assert_matches!(left, Ok(None));
+            assert!(parser.lexer.next().is_none());
         }
 
         #[test]
@@ -715,6 +726,154 @@ mod tests {
             let mut parser = t_parser("01612.369,N");
             let left = parser.accept_long();
             assert_matches!(left, Err(ParseError::UnexpectedDir(_)));
+            assert!(parser.lexer.next().is_none());
+        }
+    }
+
+    mod quality_indicator {
+        use super::*;
+
+        #[test]
+        fn lowest_value() {
+            let mut parser = t_parser("0");
+            let left = parser.expect_qual_ind();
+            assert_matches!(left, Ok(GpsQualityInd::FixNotAvailable));
+        }
+
+        #[test]
+        fn highest_value() {
+            let mut parser = t_parser("8");
+            let left = parser.expect_qual_ind();
+            assert_matches!(left, Ok(GpsQualityInd::SimulationMode));
+        }
+
+        #[test]
+        fn too_low() {
+            let mut parser = t_parser("-1");
+            let left = parser.expect_qual_ind();
+            assert_matches!(left, Err(ParseError::UnexpectedToken));
+        }
+
+        #[test]
+        fn too_high() {
+            let mut parser = t_parser("9");
+            let left = parser.expect_qual_ind();
+            assert_matches!(left, Err(ParseError::UnexpectedToken));
+        }
+    }
+
+    mod sattelites {
+        use super::*;
+
+        #[test]
+        fn lowest_value() {
+            let mut parser = t_parser("0");
+            let left = parser.expect_sat_in_view();
+            assert_matches!(left, Ok(0));
+        }
+
+        #[test]
+        fn too_low() {
+            let mut parser = t_parser("-1");
+            let left = parser.expect_sat_in_view();
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
+        }
+    }
+
+    mod hdop {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("12345.6789");
+            let left = parser.accept_hdop();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(12345.6789));
+        }
+    }
+
+    mod altitude {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("12345.6789");
+            let left = parser.accept_altitude();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(12345.6789));
+        }
+    }
+
+    mod geoidal_separation {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("12345.6789");
+            let left = parser.accept_geo_sep();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(12345.6789));
+        }
+    }
+
+    mod age {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("12345.6789");
+            let left = parser.accept_age();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(12345.6789));
+        }
+
+        #[test]
+        fn lowest_value() {
+            let mut parser = t_parser("0.0");
+            let left = parser.accept_age();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(0.0));
+        }
+
+        #[test]
+        fn negative() {
+            let mut parser = t_parser("-0.0001");
+            let left = parser.accept_age();
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
+        }
+    }
+
+    mod station_id {
+        use super::*;
+
+        #[test]
+        fn lowest() {
+            let mut parser = t_parser("0");
+            let left = parser.accept_station_id();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(0));
+        }
+
+        #[test]
+        fn highest() {
+            let mut parser = t_parser("1023");
+            let left = parser.accept_station_id();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(1023));
+        }
+
+        #[test]
+        fn too_low() {
+            let mut parser = t_parser("-1");
+            let left = parser.accept_station_id();
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
+        }
+
+        #[test]
+        fn too_high() {
+            let mut parser = t_parser("1024");
+            let left = parser.accept_station_id();
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
         }
     }
 }
