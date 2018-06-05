@@ -35,7 +35,7 @@ quick_error! {
             cause(err)
         }
         /// Failed to parse a `StringLiteral` to a `CardDir`.
-        InvalidDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
+        UnexpectedDir(dir: ArrayVec<[u8; STRING_LENGTH]>) {
             description("Unexpected direction")
             display("Could not parse {:?} as direction", dir)
         }

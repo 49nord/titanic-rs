@@ -247,7 +247,7 @@ impl<R: io::Read> GgaParser<R> {
         let lat_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"N" => Some(CardDir::North),
             Some(ref s) if s.as_slice() == b"S" => Some(CardDir::South),
-            Some(s) => return Err(ParseError::InvalidDir(s)),
+            Some(s) => return Err(ParseError::UnexpectedDir(s)),
             None => None,
         };
         match (raw_lat, lat_dir) {
@@ -268,7 +268,7 @@ impl<R: io::Read> GgaParser<R> {
         let long_dir = match accept!(self, StringLiteral, s)? {
             Some(ref s) if s.as_slice() == b"E" => Some(CardDir::East),
             Some(ref s) if s.as_slice() == b"W" => Some(CardDir::West),
-            Some(s) => return Err(ParseError::InvalidDir(s)),
+            Some(s) => return Err(ParseError::UnexpectedDir(s)),
             None => None,
         };
         match (raw_long, long_dir) {
@@ -380,12 +380,12 @@ fn parse_coord(
         ));
     }
 
-    let (deg, dec_min) = coord.split_at(deg_split);
+    let (deg, min) = coord.split_at(deg_split);
     let degrees = f64::from(u8::from_str(str::from_utf8(deg)?)?);
     if degrees < 0.0 {
         return Err(ParseError::InvalidValue(""));
     }
-    let decimal_min = fl_as_f64(dec_min)? * 10.0 / 6.0 / 100.0;
+    let decimal_min = fl_as_f64(min)? * 10.0 / 6.0 / 100.0;
     let dec_deg = degrees + decimal_min;
     if dec_deg.abs() > abs_max {
         return Err(ParseError::InvalidCoord(dec_deg, abs_max));
@@ -549,6 +549,13 @@ mod tests {
         }
 
         #[test]
+        fn negative() {
+            let mut parser = t_parser("-00000.0");
+            let left = parser.expect_utc();
+            assert_matches!(left, Err(ParseError::Time(_)));
+        }
+
+        #[test]
         fn no_dot() {
             let mut parser = t_parser("111111");
             assert_matches!(parser.expect_utc(), Err(ParseError::UnexpectedToken));
@@ -558,6 +565,53 @@ mod tests {
         fn wrong_fmt() {
             let mut parser = t_parser("1111111.11");
             assert_matches!(parser.expect_utc(), Err(ParseError::Time(_)));
+        }
+    }
+
+    mod parse_coord {
+        use super::*;
+
+        #[test]
+        fn coord_ok() {
+            let left = parse_coord(b"18000.000", &CardDir::East, 3, 180.0);
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), 180.0);
+        }
+
+        #[test]
+        fn short_coord() {
+            let left = parse_coord(b"111.0", &CardDir::East, 3, 180.0);
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), 111.0);
+        }
+
+        #[test]
+        fn higher_than_max() {
+            let left = parse_coord(b"18000.0001", &CardDir::East, 3, 180.0);
+            assert_matches!(left, Err(ParseError::InvalidCoord(_, _)));
+        }
+
+        #[test]
+        fn negative_coord() {
+            let left = parse_coord(b"-0000.001", &CardDir::East, 3, 180.0);
+            assert_matches!(left, Err(ParseError::Int(_)));
+        }
+
+        #[test]
+        fn direction_handling() {
+            let coord = b"01612.369";
+            let north = parse_coord(coord, &CardDir::North, 3, 180.0);
+            let east = parse_coord(coord, &CardDir::East, 3, 80.0);
+            let south = parse_coord(coord, &CardDir::South, 3, 180.0);
+            let west = parse_coord(coord, &CardDir::West, 3, 80.0);
+            assert!(north.is_ok() && east.is_ok() && south.is_ok() && west.is_ok());
+            let north = north.unwrap();
+            let east = east.unwrap();
+            let south = south.unwrap();
+            let west = west.unwrap();
+            assert_eq!(north, east);
+            assert_eq!(south, west);
+            assert_eq!(north, south * -1.0);
         }
     }
 }
