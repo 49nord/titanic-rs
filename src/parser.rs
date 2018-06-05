@@ -33,7 +33,7 @@ impl CardDir {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum GpsQualityInd {
     FixNotAvailable,
     GpsFix,
@@ -68,7 +68,7 @@ impl GpsQualityInd {
 
 /// This represents a correct GGA sentence and will usually be created by a
 /// [GgaParser](../parser/struct.GgaParser.html)
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GgaSentence {
     /// Talker id contained in the header of every sentence.
     pub talker_id: [u8; lexer::HEADER_LENGTH],
@@ -180,6 +180,9 @@ impl<R: io::Read> GgaParser<R> {
 
         // Parse Checksum
         expect!(self, Checksum, c)?;
+
+        // Consume new line
+        accept!(self, LineEnding)?;
 
         Ok(Some(GgaSentence {
             talker_id,
@@ -382,10 +385,11 @@ fn parse_coord(
 
     let (deg, min) = coord.split_at(deg_split);
     let degrees = f64::from(u8::from_str(str::from_utf8(deg)?)?);
-    if degrees < 0.0 {
-        return Err(ParseError::InvalidValue(""));
+    let min = fl_as_f64(min)?;
+    if min >= 60.0 {
+        return Err(ParseError::InvalidValue("minutes have to be less than 60"));
     }
-    let decimal_min = fl_as_f64(min)? * 10.0 / 6.0 / 100.0;
+    let decimal_min = min * 10.0 / 6.0 / 100.0;
     let dec_deg = degrees + decimal_min;
     if dec_deg.abs() > abs_max {
         return Err(ParseError::InvalidCoord(dec_deg, abs_max));
@@ -427,6 +431,7 @@ mod tests {
             parser.expect_sat_in_view(),
             Err(ParseError::UnexpectedToken)
         );
+        assert_matches!(parser.expect_meters(), Err(ParseError::UnexpectedToken));
     }
 
     #[test]
@@ -540,10 +545,10 @@ mod tests {
         #[test]
         fn max() {
             let mut parser = t_parser("235959.999999999");
-            assert_eq!(
-                parser.expect_utc().unwrap(),
-                NaiveTime::from_hms_nano(23, 59, 59, 999999999)
-            );
+            let left = parser.expect_utc();
+            let expected = NaiveTime::from_hms_nano(23, 59, 59, 999999999);
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
         }
 
         #[test]
@@ -601,6 +606,12 @@ mod tests {
         fn negative_coord() {
             let left = parse_coord(b"-0000.001", &CardDir::East, 3, 180.0);
             assert_matches!(left, Err(ParseError::Int(_)));
+        }
+
+        #[test]
+        fn minutes_too_high() {
+            let left = parse_coord(b"00060.0", &CardDir::East, 3, 180.0);
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
         }
 
         #[test]
@@ -874,6 +885,85 @@ mod tests {
             let mut parser = t_parser("1024");
             let left = parser.accept_station_id();
             assert_matches!(left, Err(ParseError::InvalidValue(_)));
+        }
+    }
+
+    mod units {
+        use super::*;
+
+        #[test]
+        fn meters() {
+            let mut parser = t_parser("M");
+            let left = parser.expect_meters();
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), ());
+        }
+    }
+
+    mod parse_gga {
+        use super::*;
+
+        #[test]
+        fn with_location() {
+            let gga = "$GPGGA,142212.000,1956.9418,S,06938.0163,W,1,3,5.74,102.1,M,47.9,M,,*57";
+            let talker_id = [b'G', b'P'];
+
+            let mut parser = t_parser(gga);
+            // "$GPGGA," is needed for the correct checksum, but will be skipped.
+            parser.expect_header().expect("header");
+            parser.expect_sen_type().expect("sentence type");
+            expect!(parser, CommaSeparator).expect("comma");
+
+            let left = parser.parse_gga(talker_id);
+            let expected = GgaSentence {
+                talker_id,
+                utc: NaiveTime::from_hms(14, 22, 12),
+                lat: Some(
+                    parse_coord(b"1956.9418", &CardDir::South, 2, 90.0).expect("lat: -19.949030"),
+                ),
+                long: Some(
+                    parse_coord(b"06938.0163", &CardDir::West, 3, 180.0).expect("long: -69.633605"),
+                ),
+                gps_qlty: GpsQualityInd::try_from_i64(1).expect("GpsFix"),
+                sat_view: 3,
+                hdop: Some(5.74),
+                altitude: Some(102.1),
+                geo_sep: Some(47.9),
+                age: None,
+                station_id: None,
+            };
+
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(expected));
+        }
+
+        #[test]
+        fn without_location() {
+            let talker_id = [b'G', b'P'];
+
+            let mut parser = t_parser("$GPGGA,142054.304,,,,,0,0,,,M,,M,,*49");
+            // "$GPGGA," is needed for the correct checksum, but will be skipped.
+            parser.expect_header().expect("header");
+            parser.expect_sen_type().expect("sentence type");
+            expect!(parser, CommaSeparator).expect("comma");
+
+            let left = parser.parse_gga(talker_id);
+            let expected = GgaSentence {
+                talker_id,
+                utc: NaiveTime::from_hms_milli(14, 20, 54, 304),
+                lat: None,
+                long: None,
+                gps_qlty: GpsQualityInd::try_from_i64(0).expect("FixNotAvailable"),
+                sat_view: 0,
+                hdop: None,
+                altitude: None,
+                geo_sep: None,
+                age: None,
+                station_id: None,
+            };
+
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), Some(expected));
         }
     }
 }
