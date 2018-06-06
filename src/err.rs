@@ -87,7 +87,6 @@ quick_error!{
     pub enum LexError {
         /// An invalid character.
         InvalidCharacter(c: u8) {
-            from()
             description("Invalid character")
             display("Encountered invalid character \"{}\"", *c as char)
         }

@@ -219,7 +219,10 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 }
                 Some(Ok(Token::new(TokenKind::Checksum(actual_sum))))
             }
-            Some(c) => Some(Err(c.into())),
+            Some(c) => {
+                try_some!(self.advance());
+                Some(Err(LexError::InvalidCharacter(c)))
+            }
         }
     }
 }
