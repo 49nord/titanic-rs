@@ -117,7 +117,7 @@ impl<R: io::Read> GgaParser<R> {
     /// Read a sentence.
     /// The first char has to be `'$'`. Returns `ParseError::UnexpectedSentenceType`
     /// if the sentence type is not GGA.
-    pub fn read_sentence(&mut self) -> Result<Option<GgaSentence>, ParseError> {
+    pub fn read_sentence(&mut self) -> Result<GgaSentence, ParseError> {
         let talker_id = self.expect_header()?;
         let sen_type = self.expect_sen_type()?;
         match sen_type.as_slice() {
@@ -134,7 +134,7 @@ impl<R: io::Read> GgaParser<R> {
     fn parse_gga(
         &mut self,
         talker_id: [u8; lexer::HEADER_LENGTH],
-    ) -> Result<Option<GgaSentence>, ParseError> {
+    ) -> Result<GgaSentence, ParseError> {
         // Parse utc
         let utc = self.expect_utc()?;
         expect!(self, CommaSeparator)?;
@@ -184,7 +184,7 @@ impl<R: io::Read> GgaParser<R> {
         // Consume new line
         accept!(self, LineEnding)?;
 
-        Ok(Some(GgaSentence {
+        Ok(GgaSentence {
             talker_id,
             utc,
             lat,
@@ -196,7 +196,7 @@ impl<R: io::Read> GgaParser<R> {
             geo_sep,
             age,
             station_id,
-        }))
+        })
     }
 
     /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
@@ -934,7 +934,7 @@ mod tests {
             };
 
             assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(expected));
+            assert_eq!(left.unwrap(), expected);
         }
 
         #[test]
@@ -963,6 +963,82 @@ mod tests {
             };
 
             assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
+        }
+
+        #[test]
+        fn comma_not_consumed() {
+            let talker_id = [b'G', b'P'];
+
+            let mut parser = t_parser("$GPGGA,142054.304,,,,,0,0,,,M,,M,,*49");
+            parser.expect_header().expect("header");
+            parser.expect_sen_type().expect("sentence type");
+
+            let left = parser.parse_gga(talker_id);
+            assert_matches!(left, Err(ParseError::UnexpectedToken));
+        }
+    }
+
+    mod read_sentence {
+        use super::*;
+
+        #[test]
+        fn with_location() {
+            let gga = "$GPGGA,142212.000,1956.9418,S,06938.0163,W,1,3,5.74,102.1,M,47.9,M,,*57";
+            let mut parser = t_parser(gga);
+
+            let left = parser.read_sentence();
+            let expected = GgaSentence {
+                talker_id: [b'G', b'P'],
+                utc: NaiveTime::from_hms(14, 22, 12),
+                lat: Some(
+                    parse_coord(b"1956.9418", &CardDir::South, 2, 90.0).expect("lat: -19.949030"),
+                ),
+                long: Some(
+                    parse_coord(b"06938.0163", &CardDir::West, 3, 180.0).expect("long: -69.633605"),
+                ),
+                gps_qlty: GpsQualityInd::try_from_i64(1).expect("GpsFix"),
+                sat_view: 3,
+                hdop: Some(5.74),
+                altitude: Some(102.1),
+                geo_sep: Some(47.9),
+                age: None,
+                station_id: None,
+            };
+
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
+        }
+
+        #[test]
+        fn without_location() {
+            let mut parser = t_parser("$GPGGA,142054.304,,,,,0,0,,,M,,M,,*49");
+
+            let left = parser.read_sentence();
+            let expected = GgaSentence {
+                talker_id: [b'G', b'P'],
+                utc: NaiveTime::from_hms_milli(14, 20, 54, 304),
+                lat: None,
+                long: None,
+                gps_qlty: GpsQualityInd::try_from_i64(0).expect("FixNotAvailable"),
+                sat_view: 0,
+                hdop: None,
+                altitude: None,
+                geo_sep: None,
+                age: None,
+                station_id: None,
+            };
+
+            assert!(left.is_ok());
+            assert_eq!(left.unwrap(), expected);
+        }
+
+        #[test]
+        fn wrong_sentence_type() {
+            let mut parser = t_parser("$GPGLL");
+
+            let left = parser.read_sentence();
+            assert_matches!(left, Err(ParseError::UnexpectedSentenceType));
             assert_eq!(left.unwrap(), Some(expected));
         }
     }
