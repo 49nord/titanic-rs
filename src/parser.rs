@@ -1,4 +1,4 @@
-//! This module provides a parser for the *GGA* sentence of the*NMEA 0183*
+//! This module provides a parser for the *GGA* sentence of the *NMEA 0183*
 //! protocol.
 
 use arrayvec::ArrayVec;
@@ -202,15 +202,15 @@ impl<R: io::Read> GgaParser<R> {
     /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
     /// Nothing will happen if the next token already is a header.
     /// Returns `None` if EOF has been reached.
-    pub fn jump_to_header(&mut self) -> Option<Result<(), io::Error>> {
+    pub fn jump_to_header(&mut self) -> Result<Option<()>, io::Error> {
         loop {
             match self.lexer.peek() {
-                Some(Ok(v)) if v.is_header() => return Some(Ok(())),
+                Some(Ok(v)) if v.is_header() => return Ok(Some(())),
                 Some(_) => (),
-                None => return None,
+                None => return Ok(None),
             }
             if let Some(Err(LexError::Io(e))) = self.lexer.next() {
-                return Some(Err(e));
+                return Err(e);
             }
         }
     }
@@ -1039,7 +1039,67 @@ mod tests {
 
             let left = parser.read_sentence();
             assert_matches!(left, Err(ParseError::UnexpectedSentenceType));
-            assert_eq!(left.unwrap(), Some(expected));
+        }
+    }
+
+    mod jump_to_header {
+        use super::*;
+
+        #[test]
+        fn ok() {
+            let mut parser = t_parser("abc123$aa");
+            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
+        }
+
+        #[test]
+        fn stay_at_header() {
+            let mut parser= t_parser("$aa123$bb");
+            assert!(parser.jump_to_header().is_ok());
+            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
+            assert!(parser.jump_to_header().is_ok());
+            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.expect_header(), Ok([b'b', b'b']));
+        }
+        
+        #[test]
+        fn no_header() {
+            let mut parser= t_parser("$aa");
+            assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
+            assert_matches!(parser.jump_to_header(), Ok(None));
+            assert_matches!(parser.jump_to_header(), Ok(None));
+        }
+
+        #[test]
+        fn invalid_ascii() {
+            let sentences =
+                "$GPGGA,142130.220,4900.7350,N,00825.5268,E,1,3,5.53,102.1,M,47.9,M,,*5B\n\n\
+                 -�OAz�\n\
+                 �\"AAliCGRA�B؇=&J]���b����?$GPRMC,142132.000,A,\
+                 4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
+                 $GPVTG,182.46,T,,M,0.00,N,0.00,K,A*34\n\n\
+
+                 $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
+
+            let mut parser = t_parser(sentences);
+            assert!(parser.read_sentence().is_ok());
+            assert_matches!(
+                parser.read_sentence(),
+                Err(ParseError::Lexer(::err::LexError::IncompleteToken(_)))
+            );
+            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(
+                parser.read_sentence(),
+                Err(ParseError::UnexpectedSentenceType)
+            );
+            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(
+                parser.read_sentence(),
+                Err(ParseError::UnexpectedSentenceType)
+            );
+            assert!(parser.jump_to_header().is_ok());
+            assert!(parser.read_sentence().is_ok());
         }
     }
 }
