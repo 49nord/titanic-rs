@@ -295,18 +295,12 @@ mod tests {
         fn string_ok() {
             let mut lexer = t_lexer("arg");
             let expected = str_array_vec(vec![b'a', b'r', b'g']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_),
+                    kind: TokenKind::StringLiteral(ref s),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::StringLiteral(expected)
-                }
+                if s == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -315,18 +309,12 @@ mod tests {
         fn stops_correctly() {
             let mut lexer = t_lexer("arg.");
             let expected = str_array_vec(vec![b'a', b'r', b'g']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_),
+                    kind: TokenKind::StringLiteral(ref s),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::StringLiteral(expected)
-                }
+                if s == &expected
             );
             assert!(lexer.next().is_some());
         }
@@ -379,18 +367,12 @@ mod tests {
         fn positive_float() {
             let mut lexer = t_lexer("1.23");
             let expected = float_array_vec(vec![b'1', b'.', b'2', b'3']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_),
+                    kind: TokenKind::FloatLiteral(ref f),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::FloatLiteral(expected)
-                }
+                if f == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -399,18 +381,12 @@ mod tests {
         fn negative_float() {
             let mut lexer = t_lexer("-1.23");
             let expected = float_array_vec(vec![b'-', b'1', b'.', b'2', b'3']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_),
+                    kind: TokenKind::FloatLiteral(ref f),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::FloatLiteral(expected)
-                }
+                if f == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -419,18 +395,12 @@ mod tests {
         fn end_with_dot() {
             let mut lexer = t_lexer("-123.");
             let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_),
+                    kind: TokenKind::FloatLiteral(ref f),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::FloatLiteral(expected)
-                }
+                if f == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -459,18 +429,12 @@ mod tests {
         fn negative_correct_stop_at_dot() {
             let mut lexer = t_lexer("-123.a");
             let expected = float_array_vec(vec![b'-', b'1', b'2', b'3', b'.']);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::FloatLiteral(_),
+                    kind: TokenKind::FloatLiteral(ref f),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::FloatLiteral(expected)
-                }
+                if f == &expected
             );
             assert!(lexer.next().is_some());
         }
@@ -600,18 +564,12 @@ mod tests {
             let mut lexer = t_lexer("*Z5");
             let expected = str_array_vec(vec![b'Z']);
             assert_matches!(lexer.next(), Some(Err(LexError::IncompleteToken(_))));
-            let string_lit = lexer.next();
             assert_matches!(
-                string_lit,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::StringLiteral(_),
+                    kind: TokenKind::StringLiteral(ref s),
                 }))
-            );
-            assert_eq!(
-                string_lit.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::StringLiteral(expected)
-                }
+                if s == &expected
             );
             assert_matches!(
                 lexer.next(),
@@ -638,18 +596,12 @@ mod tests {
         fn with_message() {
             let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
             let mut lexer = t_lexer("test*16").skip(1);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::Checksum(_),
+                    kind: TokenKind::Checksum(ref ch),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::Checksum(expected)
-                }
+                if ch == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -658,18 +610,12 @@ mod tests {
         fn reset_at_dollar() {
             let expected: u8 = b't' ^ b'e' ^ b's' ^ b't';
             let mut lexer = t_lexer("ab$test*16").skip(3);
-            let left = lexer.next();
             assert_matches!(
-                left,
+                lexer.next(),
                 Some(Ok(Token {
-                    kind: TokenKind::Checksum(_),
+                    kind: TokenKind::Checksum(ref ch),
                 }))
-            );
-            assert_eq!(
-                left.unwrap().unwrap(),
-                Token {
-                    kind: TokenKind::Checksum(expected)
-                }
+                if ch == &expected
             );
             assert!(lexer.next().is_none());
         }
@@ -696,80 +642,79 @@ mod tests {
     mod nmea {
         use super::{float_array_vec, str_array_vec, t_lexer, LexError, Token, TokenKind};
 
-        // FIXME: This needs to be changed. The values aren't really checked.
         #[test]
         fn correct_wo_location() {
             let mut lexer = t_lexer("$GPGGA,142013.087,,,,,0,0,,,M,,M,,*42");
-            let _header = Token::new(TokenKind::Header([b'G', b'P']));
+            let header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
-            let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
-            let _comma = Token::new(TokenKind::CommaSeparator);
+            let sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
+            let comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
                 b'1', b'4', b'2', b'0', b'1', b'3', b'.', b'0', b'8', b'7',
             ]);
-            let _float_lit = Token::new(TokenKind::FloatLiteral(float));
-            let _int_lit = Token::new(TokenKind::IntLiteral(0));
-            let _m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
-            let _checksum = Token::new(TokenKind::Checksum(66));
-            assert_matches!(lexer.next(), Some(Ok(_header)));
-            assert_matches!(lexer.next(), Some(Ok(_sentence_type)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_float_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_checksum)));
+            let float_lit = Token::new(TokenKind::FloatLiteral(float));
+            let int_lit = Token::new(TokenKind::IntLiteral(0));
+            let m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
+            let checksum = Token::new(TokenKind::Checksum(66));
+            assert_matches!(lexer.next(), Some(Ok(ref h)) if h == &header);
+            assert_matches!(lexer.next(), Some(Ok(ref st)) if st == &sentence_type);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref f)) if f == &float_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref i)) if i == &int_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref i)) if i == &int_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref m)) if m == &m_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref m)) if m == &m_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &checksum);
         }
 
         #[test]
         fn incorrect_wo_location() {
             let mut lexer = t_lexer("$GPGGA,142018.087,,,,,0,0,,,,M,,M,,*43");
-            let _header = Token::new(TokenKind::Header([b'G', b'P']));
+            let header = Token::new(TokenKind::Header([b'G', b'P']));
             let string_lit = str_array_vec(vec![b'G', b'G', b'A']);
-            let _sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
-            let _comma = Token::new(TokenKind::CommaSeparator);
+            let sentence_type = Token::new(TokenKind::StringLiteral(string_lit));
+            let comma = Token::new(TokenKind::CommaSeparator);
             let float = float_array_vec(vec![
                 b'1', b'4', b'2', b'0', b'1', b'8', b'.', b'0', b'8', b'7',
             ]);
-            let _float_lit = Token::new(TokenKind::FloatLiteral(float));
-            let _int_lit = Token::new(TokenKind::IntLiteral(0));
-            let _m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
-            assert_matches!(lexer.next(), Some(Ok(_header)));
-            assert_matches!(lexer.next(), Some(Ok(_sentence_type)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_float_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_int_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_m_lit)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
-            assert_matches!(lexer.next(), Some(Ok(_comma)));
+            let float_lit = Token::new(TokenKind::FloatLiteral(float));
+            let int_lit = Token::new(TokenKind::IntLiteral(0));
+            let m_lit = Token::new(TokenKind::StringLiteral(str_array_vec(vec![b'M'])));
+            assert_matches!(lexer.next(), Some(Ok(ref h)) if h == &header);
+            assert_matches!(lexer.next(), Some(Ok(ref st)) if st == &sentence_type);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref f)) if f == &float_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref i)) if i == &int_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref i)) if i == &int_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref m)) if m == &m_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref m)) if m == &m_lit);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
+            assert_matches!(lexer.next(), Some(Ok(ref c)) if c == &comma);
             assert_matches!(lexer.next(), Some(Err(LexError::InvalidChecksum(67, 101))));
         }
     }

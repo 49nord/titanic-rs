@@ -514,28 +514,22 @@ mod tests {
         #[test]
         fn ok() {
             let mut parser = t_parser("GGA");
-            let expected = str_array_vec(vec![b'G', b'G', b'A']);
-            let left = parser.expect_sen_type();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), expected);
+            let exp = str_array_vec(vec![b'G', b'G', b'A']);
+            assert_matches!(parser.expect_sen_type(), Ok(ref s) if s == &exp);
         }
 
         #[test]
         fn ok_long() {
             let mut parser = t_parser("aaaaa");
-            let expected = str_array_vec(vec![b'a', b'a', b'a', b'a', b'a']);
-            let left = parser.expect_sen_type();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), expected);
+            let exp = str_array_vec(vec![b'a', b'a', b'a', b'a', b'a']);
+            assert_matches!(parser.expect_sen_type(), Ok(ref s) if s == &exp);
         }
 
         #[test]
         fn ok_short() {
             let mut parser = t_parser("a");
-            let expected = str_array_vec(vec![b'a']);
-            let left = parser.expect_sen_type();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), expected);
+            let exp = str_array_vec(vec![b'a']);
+            assert_matches!(parser.expect_sen_type(), Ok(ref s) if s == &exp);
         }
     }
 
@@ -585,21 +579,21 @@ mod tests {
         #[test]
         fn coord_ok() {
             let left = parse_coord(b"18000.000", &CardDir::East, 3, 180.0);
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), 180.0);
+            assert_matches!(left, Ok(coord) if coord == 180.0);
         }
 
         #[test]
         fn short_coord() {
             let left = parse_coord(b"111.0", &CardDir::East, 3, 180.0);
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), 111.0);
+            assert_matches!(left, Ok(coord) if coord == 111.0);
         }
 
         #[test]
         fn higher_than_max() {
-            let left = parse_coord(b"18000.0001", &CardDir::East, 3, 180.0);
-            assert_matches!(left, Err(ParseError::InvalidCoord(_, _)));
+            let left = parse_coord(b"18000.3", &CardDir::East, 3, 180.0);
+            assert_matches!(left,
+                            Err(ParseError::InvalidCoord(c, max))
+                            if c == 180.005 && max == 180.0);
         }
 
         #[test]
@@ -639,8 +633,7 @@ mod tests {
         fn some_lat() {
             let mut parser = t_parser("1612.369,N");
             let left = parser.accept_lat();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(16.20615));
+            assert_matches!(left, Ok(Some(lat)) if lat == 16.20615);
             assert!(parser.lexer.next().is_none());
         }
 
@@ -648,33 +641,28 @@ mod tests {
         fn negative_lat() {
             let mut parser = t_parser("1612.369,S");
             let left = parser.accept_lat();
-            println!("{:?}", left);
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(-16.20615));
+            assert_matches!(left, Ok(Some(lat)) if lat == -16.20615);
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_coordinate() {
             let mut parser = t_parser(",N");
-            let left = parser.accept_lat();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_lat(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_direction() {
             let mut parser = t_parser("1612.369,");
-            let left = parser.accept_lat();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_lat(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_coord_or_dir() {
             let mut parser = t_parser(",");
-            let left = parser.accept_lat();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_lat(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
@@ -694,8 +682,7 @@ mod tests {
         fn some_long() {
             let mut parser = t_parser("01612.369,E");
             let left = parser.accept_long();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(16.20615));
+            assert_matches!(left, Ok(Some(long)) if long == 16.20615);
             assert!(parser.lexer.next().is_none());
         }
 
@@ -703,32 +690,28 @@ mod tests {
         fn negative_long() {
             let mut parser = t_parser("01612.369,W");
             let left = parser.accept_long();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(-16.20615));
+            assert_matches!(left, Ok(Some(long)) if long == -16.20615);
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_coordinate() {
             let mut parser = t_parser(",E");
-            let left = parser.accept_long();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_long(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_direction() {
             let mut parser = t_parser("01612.369,");
-            let left = parser.accept_long();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_long(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
         #[test]
         fn no_coord_or_dir() {
             let mut parser = t_parser(",");
-            let left = parser.accept_long();
-            assert_matches!(left, Ok(None));
+            assert_matches!(parser.accept_long(), Ok(None));
             assert!(parser.lexer.next().is_none());
         }
 
@@ -779,8 +762,7 @@ mod tests {
         #[test]
         fn lowest_value() {
             let mut parser = t_parser("0");
-            let left = parser.expect_sat_in_view();
-            assert_matches!(left, Ok(0));
+            assert_matches!(parser.expect_sat_in_view(), Ok(0));
         }
 
         #[test]
@@ -798,8 +780,7 @@ mod tests {
         fn ok() {
             let mut parser = t_parser("12345.6789");
             let left = parser.accept_hdop();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(12345.6789));
+            assert_matches!(left, Ok(Some(hdop)) if hdop == 12345.6789);
         }
     }
 
@@ -810,8 +791,7 @@ mod tests {
         fn ok() {
             let mut parser = t_parser("12345.6789");
             let left = parser.accept_altitude();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(12345.6789));
+            assert_matches!(left, Ok(Some(f)) if f == 12345.6789);
         }
     }
 
@@ -822,8 +802,7 @@ mod tests {
         fn ok() {
             let mut parser = t_parser("12345.6789");
             let left = parser.accept_geo_sep();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(12345.6789));
+            assert_matches!(left, Ok(Some(f)) if f == 12345.6789);
         }
     }
 
@@ -834,16 +813,14 @@ mod tests {
         fn ok() {
             let mut parser = t_parser("12345.6789");
             let left = parser.accept_age();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(12345.6789));
+            assert_matches!(left, Ok(Some(age)) if age == 12345.6789);
         }
 
         #[test]
         fn lowest_value() {
             let mut parser = t_parser("0.0");
             let left = parser.accept_age();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(0.0));
+            assert_matches!(left, Ok(Some(age)) if age == 0.0);
         }
 
         #[test]
@@ -861,16 +838,14 @@ mod tests {
         fn lowest() {
             let mut parser = t_parser("0");
             let left = parser.accept_station_id();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(0));
+            assert_matches!(left, Ok(Some(id)) if id == 0);
         }
 
         #[test]
         fn highest() {
             let mut parser = t_parser("1023");
             let left = parser.accept_station_id();
-            assert!(left.is_ok());
-            assert_eq!(left.unwrap(), Some(1023));
+            assert_matches!(left, Ok(Some(id)) if id == 1023);
         }
 
         #[test]
@@ -896,7 +871,6 @@ mod tests {
             let mut parser = t_parser("M");
             let left = parser.expect_meters();
             assert!(left.is_ok());
-            assert_eq!(left.unwrap(), ());
         }
     }
 
@@ -1054,7 +1028,7 @@ mod tests {
 
         #[test]
         fn stay_at_header() {
-            let mut parser= t_parser("$aa123$bb");
+            let mut parser = t_parser("$aa123$bb");
             assert!(parser.jump_to_header().is_ok());
             assert!(parser.jump_to_header().is_ok());
             assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
@@ -1062,10 +1036,10 @@ mod tests {
             assert!(parser.jump_to_header().is_ok());
             assert_matches!(parser.expect_header(), Ok([b'b', b'b']));
         }
-        
+
         #[test]
         fn no_header() {
-            let mut parser= t_parser("$aa");
+            let mut parser = t_parser("$aa");
             assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
             assert_matches!(parser.jump_to_header(), Ok(None));
             assert_matches!(parser.jump_to_header(), Ok(None));
