@@ -1,5 +1,5 @@
 [package]
-name = "nmea-gps"
+name = "nmea_gps"
 version = "0.1.0"
 authors = ["Carl Scherer <carl.scherer@49nord.de>"]
 description = "Parses the GGA sentence of the NMEA 0183 protocol."
