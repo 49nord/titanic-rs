@@ -142,3 +142,16 @@ quick_error!{
         }
     }
 }
+
+// Quick error can't handle from for tuples
+impl From<(CapacityError<u8>, usize)> for LexError {
+    fn from((e, cap): (CapacityError<u8>, usize)) -> Self {
+        LexError::ArrayOverflow(e, cap)
+    }
+}
+
+impl From<(u8, u8)> for LexError {
+    fn from((expected, actual): (u8, u8)) -> Self {
+        LexError::InvalidChecksum(expected, actual)
+    }
+}

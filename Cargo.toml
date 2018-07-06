@@ -1,12 +1,13 @@
 [package]
-name = "gps-parser"
+name = "nmea-gps"
 version = "0.1.0"
 authors = ["Carl Scherer <carl.scherer@49nord.de>"]
+description = "Parses the GGA sentence of the NMEA 0183 protocol."
 
 [dependencies]
-quick-error = "1.2.1"
+quick-error = "1.2.2"
 arrayvec = "0.4.7"
-chrono = "0.4.2"
+chrono = "0.4.4"
 
 [dev-dependencies]
 assert_matches = "1.2.0"

@@ -1,4 +1,4 @@
-use arrayvec::{ArrayVec, CapacityError};
+use arrayvec::ArrayVec;
 use std::io;
 use std::str::{self, FromStr};
 
@@ -11,19 +11,6 @@ pub const STRING_LENGTH: usize = 64;
 /// Excluded chars can be found
 /// [here](http://www.catb.org/gpsd/NMEA.html#_nmea_encoding_conventions)
 pub const EXCLUDED_CHARS: [u8; 5] = [b'*', b'I', b'$', b'\n', b'\r'];
-
-// Quick error can't handle from for tuples
-impl From<(CapacityError<u8>, usize)> for LexError {
-    fn from((e, cap): (CapacityError<u8>, usize)) -> Self {
-        LexError::ArrayOverflow(e, cap)
-    }
-}
-
-impl From<(u8, u8)> for LexError {
-    fn from((expected, actual): (u8, u8)) -> Self {
-        LexError::InvalidChecksum(expected, actual)
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
@@ -229,9 +216,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LexError, Token, TokenKind, Tokenizer, EXCLUDED_CHARS, NUMBER_LENGTH,
-                STRING_LENGTH};
-    use arrayvec::ArrayVec;
+    use super::*;
     use std::io::Cursor;
 
     fn t_lexer(arg: &str) -> Tokenizer<Cursor<&str>> {

@@ -66,7 +66,7 @@ impl GpsQualityInd {
     }
 }
 
-/// This represents a correct GGA sentence and will usually be created by a
+/// Represents a correct GGA sentence and will usually be created by a
 /// [GgaParser](../parser/struct.GgaParser.html)
 #[derive(Debug, PartialEq)]
 pub struct GgaSentence {
@@ -100,7 +100,7 @@ pub struct GgaSentence {
     pub station_id: Option<u32>,
 }
 
-/// The parser for the `NMEA 0183` protocol that parses only GGA sentences.
+/// Parser for the `NMEA 0183` protocol that parses only GGA sentences.
 #[derive(Debug)]
 pub struct GgaParser<R: io::Read> {
     lexer: iter::Peekable<lexer::Tokenizer<R>>,
@@ -201,7 +201,7 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
     /// Nothing will happen if the next token already is a header.
-    /// Returns `None` if EOF has been reached.
+    /// Returns `Ok(None)` if EOF has been reached.
     pub fn jump_to_header(&mut self) -> Result<Option<()>, io::Error> {
         loop {
             match self.lexer.peek() {
@@ -404,8 +404,7 @@ fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_coord, CardDir, GgaParser, GgaSentence, GpsQualityInd, ParseError};
-    use chrono::NaiveTime;
+    use super::*;
     use std::io::Cursor;
 
     fn t_parser(arg: &str) -> GgaParser<Cursor<&str>> {

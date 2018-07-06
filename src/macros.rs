@@ -1,8 +1,8 @@
 /// Like the try! macro, but only works on Result<Option<_>, _> and returns
 /// Some(Err(err)) instead of Err(err).
-/// ```rust
-/// assert!(try_some!(Ok(Some(1))), Some(1));
-/// assert!(try_some!(Ok(None)), None);
+/// ```rust,ignore
+/// assert_eq!(try_some!(Ok(Some(1))), Some(1));
+/// assert_eq!(try_some!(Ok(None)), None);
 /// try_some!(Err("some error")) // returns Some(Err("some error"))
 /// ```
 #[macro_export]
@@ -17,8 +17,8 @@ macro_rules! try_some {
 }
 
 /// Like the try! macro only that this returns Some(Err(err)) instead of Err(err).
-/// ```rust
-/// assert!(try_err!(Ok(1)), try!(Ok(1)));
+/// ```rust,ignore
+/// assert_eq!(try_err!(Ok(1)), try!(Ok(1)));
 /// assert!(try_err!(Err("some error"))) // returns Some(Err("some error"))
 /// ```
 #[macro_export]
@@ -35,15 +35,15 @@ macro_rules! try_err {
 ///
 /// The first arg has to have an accessible field `lexer: iter::Peekable<_>`.
 /// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
-/// If the variant contains data, a third arg is needed and can be any indent.
+/// If the variant contains data, a third arg is needed and can be any ident.
 ///
 /// `Ok(Some(TokenKind))` is returned if it is the correct token without data.
 /// `Ok(Some(data))` is returned if it is the correct token with data.
 /// `Ok(None)` is returned if another token is found.
 /// If an error is found, it will be returned.
 ///
-/// ```rust
-/// // In a method of GgaParser wrapping ",doc*"
+/// ```rust,ignore
+/// // In a method of GgaParser. The next bytes to parse are b",doc*".
 /// assert_eq!(accept!(self, CommaSeparator), Ok(Some(TokenKind::CommaSeparator)));
 /// assert_eq!(accept!(self, CommaSeparator), Ok(None));
 /// match accept!(self, StringLiteral, s) {
@@ -106,14 +106,14 @@ macro_rules! accept {
 ///
 /// The first arg has to be a parser with an accessible field `lexer`.
 /// The second arg is the name of a `TokenKind` variant, e.g. `StringLiteral`.
-/// If the variant contains data, a third arg is needed and can be any indent.
+/// If the variant contains data, a third arg is needed and can be any ident.
 ///
 /// `Ok(TokenKind)` is returned if it is the correct token without data.
 /// `Ok(data)` is returned if it is the correct token with data.
 /// `Err(ParseError::UnexpectedToken)` is returned if another token is found.
 /// If an error is found, it will be returned.
 ///
-/// ```rust
+/// ```rust,ignore
 /// // In a method of GgaParser wrapping ",doc*"
 /// assert_eq!(expect!(self, CommaSeparator), Ok(TokenKind::CommaSeparator));
 /// assert_eq!(expect!(self, CommaSeparator), Err(ParseError::UnexpectedToken));
