@@ -370,7 +370,7 @@ impl<R: io::Read> GgaParser<R> {
 }
 
 impl<R: io::Read> iter::Iterator for GgaParser<R> {
-    type Item = Option<GgaSentence>;
+    type Item = GgaSentence;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -379,7 +379,7 @@ impl<R: io::Read> iter::Iterator for GgaParser<R> {
                 Some(Ok(())) => (),
             }
             match self.read_sentence() {
-                Ok(gga) => return Some(Some(gga)),
+                Ok(gga) => return Some(gga),
                 Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => return None,
                 Err(ParseError::Lexer(LexError::Io(_))) => return None,
                 Err(_) => (),
@@ -1120,8 +1120,8 @@ mod tests {
                  $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
 
             let mut parser = t_parser(sentences);
-            assert_matches!(parser.next(), Some(Some(_)));
-            assert_matches!(parser.next(), Some(Some(_)));
+            assert_matches!(parser.next(), Some(_));
+            assert_matches!(parser.next(), Some(_));
             assert!(parser.next().is_none());
             assert!(parser.next().is_none());
         }
@@ -1138,8 +1138,8 @@ mod tests {
                  $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
 
             let mut parser = t_parser(sentences);
-            assert_matches!(parser.next(), Some(Some(_)));
-            assert_matches!(parser.next(), Some(Some(_)));
+            assert_matches!(parser.next(), Some(_));
+            assert_matches!(parser.next(), Some(_));
             assert!(parser.next().is_none());
             assert!(parser.next().is_none());
         }
