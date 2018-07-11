@@ -366,6 +366,22 @@ impl<R: io::Read> GgaParser<R> {
     }
 }
 
+impl<R: io::Read> iter::Iterator for GgaParser<R> {
+    type Item = Option<GgaSentence>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.jump_to_header().is_err() {
+            return None;
+        }
+        match self.read_sentence() {
+            Ok(gga) => Some(Some(gga)),
+            Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => None,
+            Err(ParseError::Lexer(LexError::Io(_))) => None,
+            Err(_) => Some(None),
+        }
+    }
+}
+
 /// Parse `coord` as a f64 representing a coordinate.
 /// The coordinate will be multiplied by 1 or -1 depending on the direction.
 /// `deg_split` is the number of digits that represent the degrees.
