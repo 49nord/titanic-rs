@@ -116,7 +116,10 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Read a sentence.
     /// The first char has to be `'$'`. Returns `ParseError::UnexpectedSentenceType`
-    /// if the sentence type is not GGA.
+    /// if the sentence type is not GGA. This should be used together with
+    /// [`jump_to_header()`](./struct.GgaParser.html#method.jump_to_header),
+    /// because it is not possible to find out if EOF has been reached with
+    /// this method.
     pub fn read_sentence(&mut self) -> Result<GgaSentence, ParseError> {
         let talker_id = self.expect_header()?;
         let sen_type = self.expect_sen_type()?;
@@ -201,16 +204,16 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Skips and consumes all tokens till the next `TokenKind::Header` or EOF.
     /// Nothing will happen if the next token already is a header.
-    /// Returns `Ok(None)` if EOF has been reached.
-    pub fn jump_to_header(&mut self) -> Result<Option<()>, io::Error> {
+    /// Returns `None` if EOF has been reached.
+    pub fn jump_to_header(&mut self) -> Option<Result<(), io::Error>> {
         loop {
             match self.lexer.peek() {
-                Some(Ok(v)) if v.is_header() => return Ok(Some(())),
+                Some(Ok(v)) if v.is_header() => return Some(Ok(())),
                 Some(_) => (),
-                None => return Ok(None),
+                None => return None,
             }
             if let Some(Err(LexError::Io(e))) = self.lexer.next() {
-                return Err(e);
+                return Some(Err(e));
             }
         }
     }
@@ -370,14 +373,17 @@ impl<R: io::Read> iter::Iterator for GgaParser<R> {
     type Item = Option<GgaSentence>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.jump_to_header().is_err() {
-            return None;
-        }
-        match self.read_sentence() {
-            Ok(gga) => Some(Some(gga)),
-            Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => None,
-            Err(ParseError::Lexer(LexError::Io(_))) => None,
-            Err(_) => Some(None),
+        loop {
+            match self.jump_to_header() {
+                None | Some(Err(_)) => return None,
+                Some(Ok(())) => (),
+            }
+            match self.read_sentence() {
+                Ok(gga) => return Some(Some(gga)),
+                Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => return None,
+                Err(ParseError::Lexer(LexError::Io(_))) => return None,
+                Err(_) => (),
+            }
         }
     }
 }
@@ -1037,18 +1043,30 @@ mod tests {
         #[test]
         fn ok() {
             let mut parser = t_parser("abc123$aa");
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
+        }
+
+        #[test]
+        fn empty() {
+            let mut parser = t_parser("");
+            assert_matches!(parser.jump_to_header(), None);
+        }
+
+        #[test]
+        fn input_but_no_header() {
+            let mut parser = t_parser(" asdfasd o/))) 2f'#");
+            assert_matches!(parser.jump_to_header(), None);
         }
 
         #[test]
         fn stay_at_header() {
             let mut parser = t_parser("$aa123$bb");
-            assert!(parser.jump_to_header().is_ok());
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
-            assert!(parser.jump_to_header().is_ok());
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert_matches!(parser.expect_header(), Ok([b'b', b'b']));
         }
 
@@ -1056,8 +1074,8 @@ mod tests {
         fn no_header() {
             let mut parser = t_parser("$aa");
             assert_matches!(parser.expect_header(), Ok([b'a', b'a']));
-            assert_matches!(parser.jump_to_header(), Ok(None));
-            assert_matches!(parser.jump_to_header(), Ok(None));
+            assert_matches!(parser.jump_to_header(), None);
+            assert_matches!(parser.jump_to_header(), None);
         }
 
         #[test]
@@ -1077,18 +1095,68 @@ mod tests {
                 parser.read_sentence(),
                 Err(ParseError::Lexer(::err::LexError::IncompleteToken(_)))
             );
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert_matches!(
                 parser.read_sentence(),
                 Err(ParseError::UnexpectedSentenceType)
             );
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert_matches!(
                 parser.read_sentence(),
                 Err(ParseError::UnexpectedSentenceType)
             );
-            assert!(parser.jump_to_header().is_ok());
+            assert_matches!(parser.jump_to_header(), Some(Ok(())));
             assert!(parser.read_sentence().is_ok());
+        }
+    }
+
+    mod iter {
+        use super::*;
+
+        #[test]
+        fn correct_sentences() {
+            let sentences =
+                "$GPGGA,142130.220,4900.7350,N,00825.5268,E,1,3,5.53,102.1,M,47.9,M,,*5B\n\n\
+                 $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
+
+            let mut parser = t_parser(sentences);
+            assert_matches!(parser.next(), Some(Some(_)));
+            assert_matches!(parser.next(), Some(Some(_)));
+            assert!(parser.next().is_none());
+            assert!(parser.next().is_none());
+        }
+
+        #[test]
+        fn with_invalid_ascii() {
+            let sentences =
+                "$GPGGA,142130.220,4900.7350,N,00825.5268,E,1,3,5.53,102.1,M,47.9,M,,*5B\n\n\
+                 -�OAz�\n\
+                 �\"AAliCGRA�B؇=&J]���b����?$GPRMC,142132.000,A,\
+                 4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
+                 $GPVTG,182.46,T,,M,0.00,N,0.00,K,A*34\n\n\
+
+                 $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
+
+            let mut parser = t_parser(sentences);
+            assert_matches!(parser.next(), Some(Some(_)));
+            assert_matches!(parser.next(), Some(Some(_)));
+            assert!(parser.next().is_none());
+            assert!(parser.next().is_none());
+        }
+
+        #[test]
+        fn empty_input() {
+            let mut parser = t_parser("");
+            assert!(parser.next().is_none());
+        }
+
+        #[test]
+        fn without_gga() {
+            let input = "iCGRA�B؇=&J]���b����?$GPRMC,142132.000,A,\
+                         4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
+                         $GPVTG,182.46,T,,M,0.00,N,0.00";
+            let mut parser = t_parser(input);
+            assert!(parser.next().is_none());
         }
     }
 }

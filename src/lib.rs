@@ -12,5 +12,4 @@ mod macros;
 mod lexer;
 pub mod parser;
 
-pub use err::{LexError, ParseError};
 pub use parser::{GgaParser, GgaSentence};
