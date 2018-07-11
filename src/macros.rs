@@ -63,13 +63,10 @@ macro_rules! accept {
                 $parser.lexer.next();
                 Ok(Some(::lexer::TokenKind::$toktype))
             }
-            Some(&Err(_)) => {
-                if let Some(Err(e)) = $parser.lexer.next() {
-                    Err(e)
-                } else {
-                    unreachable!()
-                }
-            }
+            Some(&Err(_)) => match $parser.lexer.next() {
+                Some(Err(e)) => Err(e),
+                _ => unreachable!(),
+            },
             _ => Ok(None),
         }
     };
@@ -79,24 +76,17 @@ macro_rules! accept {
             Some(Ok(::lexer::Token {
                 kind: ::lexer::TokenKind::$toktype(_),
                 ..
-            })) => {
-                if let Some(Ok(::lexer::Token {
+            })) => match $parser.lexer.next() {
+                Some(Ok(::lexer::Token {
                     kind: ::lexer::TokenKind::$toktype($tokdata),
                     ..
-                })) = $parser.lexer.next()
-                {
-                    Ok(Some($tokdata))
-                } else {
-                    unreachable!()
-                }
-            }
-            Some(&Err(_)) => {
-                if let Some(Err(e)) = $parser.lexer.next() {
-                    Err(e)
-                } else {
-                    unreachable!()
-                }
-            }
+                })) => Ok(Some($tokdata)),
+                _ => unreachable!(),
+            },
+            Some(&Err(_)) => match $parser.lexer.next() {
+                Some(Err(e)) => Err(e),
+                _ => unreachable!(),
+            },
             _ => Ok(None),
         }
     };
