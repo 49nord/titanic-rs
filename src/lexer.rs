@@ -96,7 +96,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                 let mut header = [0u8; HEADER_LENGTH];
                 for v in &mut header {
                     match try_some!(self.advance()) {
-                        None => return Some(Err("Header".into())),
+                        None => return Some(Err(LexError::UnexpectedEof("Header"))),
                         Some(c) => *v = c,
                     }
                 }
@@ -108,9 +108,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     if !a.is_ascii_alphabetic() {
                         break;
                     }
-                    if let Err(e) = buf.try_push(a) {
-                        return Some(Err((e, buf.capacity()).into()));
-                    }
+                    try_err!(buf.try_push(a));
                     try_some!(self.advance());
                 }
                 Some(Ok(Token::new(TokenKind::StringLiteral(buf))))
@@ -118,9 +116,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
             Some(c) if c.is_ascii_digit() || c == b'-' => {
                 let mut buf = ArrayVec::<[u8; NUMBER_LENGTH]>::new();
                 if c == b'-' {
-                    if let Err(e) = buf.try_push(c) {
-                        return Some(Err((e, buf.capacity()).into()));
-                    }
+                    try_err!(buf.try_push(c));
                     try_some!(self.advance());
                     if let Some(d) = self.peek_buf {
                         if !d.is_ascii_digit() {
@@ -134,18 +130,14 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                     if !d.is_ascii_digit() {
                         break;
                     }
-                    if let Err(e) = buf.try_push(d) {
-                        return Some(Err((e, buf.capacity()).into()));
-                    }
+                    try_err!(buf.try_push(d));
                     try_some!(self.advance());
                 }
 
                 if let Some(c) = self.peek_buf {
                     if c == b'.' {
                         // we got a decimal dot!
-                        if let Err(e) = buf.try_push(c) {
-                            return Some(Err((e, buf.capacity()).into()));
-                        }
+                        try_err!(buf.try_push(c));
                         try_some!(self.advance());
 
                         // read another integer literal
@@ -153,9 +145,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
                             if !d.is_ascii_digit() {
                                 break;
                             }
-                            if let Err(e) = buf.try_push(d) {
-                                return Some(Err((e, buf.capacity()).into()));
-                            }
+                            try_err!(buf.try_push(d));
                             try_some!(self.advance());
                         }
                         return Some(Ok(Token::new(TokenKind::FloatLiteral(buf))));
@@ -189,11 +179,9 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
                 for _ in 0..CHECKSUM_LENGTH {
                     match self.peek_buf {
-                        None => return Some(Err("Checksum".into())),
+                        None => return Some(Err(LexError::UnexpectedEof("Checksum"))),
                         Some(h) if h.is_ascii_hexdigit() => {
-                            if let Err(e) = buf.try_push(h) {
-                                return Some(Err((e, buf.capacity()).into()));
-                            }
+                            try_err!(buf.try_push(h));
                         }
                         Some(_) => return Some(Err(LexError::IncompleteToken("Checksum"))),
                     }

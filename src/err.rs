@@ -108,7 +108,6 @@ quick_error!{
         /// This can happen in the header and the checksum, when there aren't
         /// enough bytes after the starting sign.
         UnexpectedEof(token: &'static str) {
-            from()
             description("Unexpected EOF")
             display("Encountered unexpected EOF in {}", token)
         }
@@ -120,9 +119,10 @@ quick_error!{
             display("Could not complete token of type {}", token)
         }
         /// An array overflowed while trying to push values into it.
-        ArrayOverflow(err: CapacityError<u8>, capacity: usize) {
+        ArrayOverflow(err: CapacityError<u8>) {
+            from()
             description(err.description())
-            display("Tried to push more than {} characters into the buffer: {}", capacity, err)
+            display("Array buffer overflow: {}", err)
             cause(err)
         }
         /// Failed to parse an integer.
@@ -140,13 +140,6 @@ quick_error!{
             display("Expected ascii but did not even get valid utf8: {}", err)
             cause(err)
         }
-    }
-}
-
-// Quick error can't handle from for tuples
-impl From<(CapacityError<u8>, usize)> for LexError {
-    fn from((e, cap): (CapacityError<u8>, usize)) -> Self {
-        LexError::ArrayOverflow(e, cap)
     }
 }
 
