@@ -49,7 +49,6 @@ pub enum GpsQualityInd {
 impl GpsQualityInd {
     /// Takes an integer in the range `0..=8` and returns the corresponding `GpsQualityInd`.
     /// Else `ParseError::UnexpectedToken` is returned.
-    #[inline]
     fn try_from_i64(int: i64) -> Result<Self, ParseError> {
         match int {
             0 => Ok(GpsQualityInd::FixNotAvailable),
@@ -221,20 +220,17 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Expect the next token to be a header.
     /// The expected format is `$xx`.
-    #[inline]
     fn expect_header(&mut self) -> Result<[u8; 2], ParseError> {
         expect!(self, Header, h)
     }
 
     /// Expect the next token to represent the sentence type.
-    #[inline]
     fn expect_sen_type(&mut self) -> Result<ArrayVec<[u8; 64]>, ParseError> {
         expect!(self, StringLiteral, s)
     }
 
     /// Expect the next token to represent utc.
     /// The expected format is `hhmmss.sss`.
-    #[inline]
     fn expect_utc(&mut self) -> Result<NaiveTime, ParseError> {
         Ok(NaiveTime::parse_from_str(
             str::from_utf8(&expect!(self, FloatLiteral, f)?)?,
@@ -285,14 +281,12 @@ impl<R: io::Read> GgaParser<R> {
     }
 
     /// Expect the next token to represent a `GpsQualityInd`.
-    #[inline]
     fn expect_qual_ind(&mut self) -> Result<GpsQualityInd, ParseError> {
         GpsQualityInd::try_from_i64(expect!(self, IntLiteral, i)?)
     }
 
     /// Expect the next token to represent the number of sattelites in view
     /// Returns `Err(ParseError::InvalidValue(_))` if the number is < 0.
-    #[inline]
     fn expect_sat_in_view(&mut self) -> Result<u64, ParseError> {
         match expect!(self, IntLiteral, i)? {
             i if i < 0 => Err(ParseError::InvalidValue(
@@ -304,7 +298,6 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Accept the next token as horizontal dilution of precision, set to `None` if the field is
     /// empty.
-    #[inline]
     fn accept_hdop(&mut self) -> Result<Option<f64>, ParseError> {
         match accept!(self, FloatLiteral, f)? {
             Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
@@ -313,7 +306,6 @@ impl<R: io::Read> GgaParser<R> {
     }
 
     /// Accept the next token as antenna altitude, set to `None` if the field is empty.
-    #[inline]
     fn accept_altitude(&mut self) -> Result<Option<f64>, ParseError> {
         match accept!(self, FloatLiteral, f)? {
             Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
@@ -322,7 +314,6 @@ impl<R: io::Read> GgaParser<R> {
     }
 
     /// Accept the next token as geoidal separation, set to `None` if the field is empty.
-    #[inline]
     fn accept_geo_sep(&mut self) -> Result<Option<f64>, ParseError> {
         match accept!(self, FloatLiteral, f)? {
             Some(f) => Ok(Some(fl_as_f64(f.as_slice())?)),
@@ -361,7 +352,6 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Check if the next token is a `StringLiteral` with the value b'M'.
     /// Else return an error.
-    #[inline]
     fn expect_meters(&mut self) -> Result<(), ParseError> {
         if expect!(self, StringLiteral, s)?.as_slice() != b"M" {
             return Err(ParseError::InvalidUnit);
@@ -420,7 +410,6 @@ fn parse_coord(
     Ok(dec_deg * dir.get_sign() as f64)
 }
 
-#[inline]
 fn fl_as_f64(fl: &[u8]) -> Result<f64, ParseError> {
     Ok(f64::from_str(str::from_utf8(fl)?)?)
 }
