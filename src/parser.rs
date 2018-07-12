@@ -134,6 +134,7 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Parse a GGA sentence.
     /// The comma before utc has to have already been consumed.
+    #[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
     fn parse_gga(
         &mut self,
         talker_id: [u8; lexer::HEADER_LENGTH],

@@ -88,6 +88,7 @@ impl<R: io::Read> Tokenizer<R> {
 impl<R: io::Read> Iterator for Tokenizer<R> {
     type Item = Result<Token, LexError>;
 
+    #[cfg_attr(feature = "cargo-clippy", allow(cyclomatic_complexity))]
     fn next(&mut self) -> Option<Self::Item> {
         match self.peek_buf {
             None => None,
