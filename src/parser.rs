@@ -24,7 +24,8 @@ enum CardDir {
 }
 
 impl CardDir {
-    #[inline]
+    /// Provides the sign of the direction for the calculation of
+    /// decimal degrees.
     fn get_sign(&self) -> isize {
         match self {
             CardDir::North | CardDir::East => 1,
@@ -33,6 +34,7 @@ impl CardDir {
     }
 }
 
+/// Indicator of the quality of the measured data.
 #[derive(Debug, PartialEq)]
 pub enum GpsQualityInd {
     FixNotAvailable,
