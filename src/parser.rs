@@ -62,7 +62,9 @@ impl GpsQualityInd {
             6 => Ok(GpsQualityInd::Estimated),
             7 => Ok(GpsQualityInd::ManualInputMode),
             8 => Ok(GpsQualityInd::SimulationMode),
-            _ => Err(ParseError::UnexpectedToken),
+            _ => Err(ParseError::InvalidValue(
+                "quality indicator has to be between 0 and 8 inclusive",
+            )),
         }
     }
 }
@@ -471,7 +473,7 @@ mod tests {
     fn gps_quality_from_i64() {
         assert_matches!(
             GpsQualityInd::try_from_i64(-1),
-            Err(ParseError::UnexpectedToken)
+            Err(ParseError::InvalidValue(_))
         );
         assert_matches!(
             GpsQualityInd::try_from_i64(0),
@@ -499,7 +501,7 @@ mod tests {
         );
         assert_matches!(
             GpsQualityInd::try_from_i64(9),
-            Err(ParseError::UnexpectedToken)
+            Err(ParseError::InvalidValue(_))
         );
     }
 
@@ -758,14 +760,14 @@ mod tests {
         fn too_low() {
             let mut parser = t_parser("-1");
             let left = parser.expect_qual_ind();
-            assert_matches!(left, Err(ParseError::UnexpectedToken));
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
         }
 
         #[test]
         fn too_high() {
             let mut parser = t_parser("9");
             let left = parser.expect_qual_ind();
-            assert_matches!(left, Err(ParseError::UnexpectedToken));
+            assert_matches!(left, Err(ParseError::InvalidValue(_)));
         }
     }
 
