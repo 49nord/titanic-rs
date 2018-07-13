@@ -369,14 +369,10 @@ impl<R: io::Read> iter::Iterator for GgaParser<R> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.jump_to_header() {
-                None | Some(Err(_)) => return None,
-                Some(Ok(())) => (),
-            }
+            let _ = self.jump_to_header()?;
             match self.read_sentence() {
                 Ok(gga) => return Some(Ok(gga)),
                 Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => return None,
-                Err(ParseError::Lexer(LexError::Io(_))) => return None,
                 Err(e) => return Some(Err(e)),
             }
         }
