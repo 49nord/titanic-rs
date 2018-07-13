@@ -51,7 +51,7 @@ pub enum GpsQualityInd {
 impl GpsQualityInd {
     /// Takes an integer in the range `0..=8` and returns the corresponding `GpsQualityInd`.
     /// Else `ParseError::UnexpectedToken` is returned.
-    fn try_from_i64(int: i64) -> Result<Self, ParseError> {
+    fn try_from_isize(int: isize) -> Result<Self, ParseError> {
         match int {
             0 => Ok(GpsQualityInd::FixNotAvailable),
             1 => Ok(GpsQualityInd::GpsFix),
@@ -286,7 +286,7 @@ impl<R: io::Read> GgaParser<R> {
 
     /// Expect the next token to represent a `GpsQualityInd`.
     fn expect_qual_ind(&mut self) -> Result<GpsQualityInd, ParseError> {
-        GpsQualityInd::try_from_i64(expect!(self, IntLiteral, i)?)
+        GpsQualityInd::try_from_isize(expect!(self, IntLiteral, i)?)
     }
 
     /// Expect the next token to represent the number of sattelites in view
@@ -470,37 +470,43 @@ mod tests {
     }
 
     #[test]
-    fn gps_quality_from_i64() {
+    fn gps_quality_from_isize() {
         assert_matches!(
-            GpsQualityInd::try_from_i64(-1),
+            GpsQualityInd::try_from_isize(-1),
             Err(ParseError::InvalidValue(_))
         );
         assert_matches!(
-            GpsQualityInd::try_from_i64(0),
+            GpsQualityInd::try_from_isize(0),
             Ok(GpsQualityInd::FixNotAvailable)
         );
-        assert_matches!(GpsQualityInd::try_from_i64(1), Ok(GpsQualityInd::GpsFix));
+        assert_matches!(GpsQualityInd::try_from_isize(1), Ok(GpsQualityInd::GpsFix));
         assert_matches!(
-            GpsQualityInd::try_from_i64(2),
+            GpsQualityInd::try_from_isize(2),
             Ok(GpsQualityInd::DifferentialGpsFix)
         );
-        assert_matches!(GpsQualityInd::try_from_i64(3), Ok(GpsQualityInd::PpsFix));
+        assert_matches!(GpsQualityInd::try_from_isize(3), Ok(GpsQualityInd::PpsFix));
         assert_matches!(
-            GpsQualityInd::try_from_i64(4),
+            GpsQualityInd::try_from_isize(4),
             Ok(GpsQualityInd::RealTimeKinematic)
         );
-        assert_matches!(GpsQualityInd::try_from_i64(5), Ok(GpsQualityInd::FloatRtk));
-        assert_matches!(GpsQualityInd::try_from_i64(6), Ok(GpsQualityInd::Estimated));
         assert_matches!(
-            GpsQualityInd::try_from_i64(7),
+            GpsQualityInd::try_from_isize(5),
+            Ok(GpsQualityInd::FloatRtk)
+        );
+        assert_matches!(
+            GpsQualityInd::try_from_isize(6),
+            Ok(GpsQualityInd::Estimated)
+        );
+        assert_matches!(
+            GpsQualityInd::try_from_isize(7),
             Ok(GpsQualityInd::ManualInputMode)
         );
         assert_matches!(
-            GpsQualityInd::try_from_i64(8),
+            GpsQualityInd::try_from_isize(8),
             Ok(GpsQualityInd::SimulationMode)
         );
         assert_matches!(
-            GpsQualityInd::try_from_i64(9),
+            GpsQualityInd::try_from_isize(9),
             Err(ParseError::InvalidValue(_))
         );
     }
@@ -913,7 +919,7 @@ mod tests {
                 long: Some(
                     parse_coord(b"06938.0163", &CardDir::West, 3, 180.0).expect("long: -69.633605"),
                 ),
-                gps_qlty: GpsQualityInd::try_from_i64(1).expect("GpsFix"),
+                gps_qlty: GpsQualityInd::try_from_isize(1).expect("GpsFix"),
                 sat_view: 3,
                 hdop: Some(5.74),
                 altitude: Some(102.1),
@@ -942,7 +948,7 @@ mod tests {
                 utc: NaiveTime::from_hms_milli(14, 20, 54, 304),
                 lat: None,
                 long: None,
-                gps_qlty: GpsQualityInd::try_from_i64(0).expect("FixNotAvailable"),
+                gps_qlty: GpsQualityInd::try_from_isize(0).expect("FixNotAvailable"),
                 sat_view: 0,
                 hdop: None,
                 altitude: None,
@@ -986,7 +992,7 @@ mod tests {
                 long: Some(
                     parse_coord(b"06938.0163", &CardDir::West, 3, 180.0).expect("long: -69.633605"),
                 ),
-                gps_qlty: GpsQualityInd::try_from_i64(1).expect("GpsFix"),
+                gps_qlty: GpsQualityInd::try_from_isize(1).expect("GpsFix"),
                 sat_view: 3,
                 hdop: Some(5.74),
                 altitude: Some(102.1),
@@ -1009,7 +1015,7 @@ mod tests {
                 utc: NaiveTime::from_hms_milli(14, 20, 54, 304),
                 lat: None,
                 long: None,
-                gps_qlty: GpsQualityInd::try_from_i64(0).expect("FixNotAvailable"),
+                gps_qlty: GpsQualityInd::try_from_isize(0).expect("FixNotAvailable"),
                 sat_view: 0,
                 hdop: None,
                 altitude: None,

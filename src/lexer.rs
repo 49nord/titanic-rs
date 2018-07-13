@@ -18,7 +18,7 @@ pub enum TokenKind {
     StringLiteral(ArrayVec<[u8; STRING_LENGTH]>),
     CommaSeparator,
     FloatLiteral(ArrayVec<[u8; NUMBER_LENGTH]>),
-    IntLiteral(i64),
+    IntLiteral(isize),
     Checksum(u8),
     LineEnding,
 }
@@ -155,7 +155,7 @@ impl<R: io::Read> Iterator for Tokenizer<R> {
 
                 // we got an integer
                 let string = try_err!(str::from_utf8(&buf));
-                let int = try_err!(i64::from_str(string));
+                let int = try_err!(isize::from_str(string));
                 Some(Ok(Token::new(TokenKind::IntLiteral(int))))
             }
             Some(c) if c == b',' => {
