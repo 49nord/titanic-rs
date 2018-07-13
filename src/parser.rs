@@ -365,7 +365,7 @@ impl<R: io::Read> GgaParser<R> {
 }
 
 impl<R: io::Read> iter::Iterator for GgaParser<R> {
-    type Item = GgaSentence;
+    type Item = Result<GgaSentence, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -374,10 +374,10 @@ impl<R: io::Read> iter::Iterator for GgaParser<R> {
                 Some(Ok(())) => (),
             }
             match self.read_sentence() {
-                Ok(gga) => return Some(gga),
+                Ok(gga) => return Some(Ok(gga)),
                 Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => return None,
                 Err(ParseError::Lexer(LexError::Io(_))) => return None,
-                Err(_) => (),
+                Err(e) => return Some(Err(e)),
             }
         }
     }
@@ -1120,9 +1120,8 @@ mod tests {
                  $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
 
             let mut parser = t_parser(sentences);
-            assert_matches!(parser.next(), Some(_));
-            assert_matches!(parser.next(), Some(_));
-            assert!(parser.next().is_none());
+            assert_matches!(parser.next(), Some(Ok(GgaSentence { .. })));
+            assert_matches!(parser.next(), Some(Ok(GgaSentence { .. })));
             assert!(parser.next().is_none());
         }
 
@@ -1138,9 +1137,27 @@ mod tests {
                  $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
 
             let mut parser = t_parser(sentences);
-            assert_matches!(parser.next(), Some(_));
-            assert_matches!(parser.next(), Some(_));
+            assert_matches!(parser.next(), Some(Ok(GgaSentence { .. })));
+            assert_matches!(parser.next(), Some(Err(_)));
+            assert_matches!(parser.next(), Some(Err(_)));
+            assert_matches!(parser.next(), Some(Ok(GgaSentence { .. })));
             assert!(parser.next().is_none());
+        }
+
+        #[test]
+        fn filter_gga_with_invalid_ascii() {
+            let sentences =
+                "$GPGGA,142130.220,4900.7350,N,00825.5268,E,1,3,5.53,102.1,M,47.9,M,,*5B\n\n\
+                 -�OAz�\n\
+                 �\"AAliCGRA�B؇=&J]���b����?$GPRMC,142132.000,A,\
+                 4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
+                 $GPVTG,182.46,T,,M,0.00,N,0.00,K,A*34\n\n\
+
+                 $GPGGA,142132.000,4900.7350,N,00825.5269,E,1,3,5.53,102.1,M,47.9,M,,*58";
+
+            let mut parser = t_parser(sentences).filter_map(|v| v.ok());
+            assert_matches!(parser.next(), Some(GgaSentence { .. }));
+            assert_matches!(parser.next(), Some(GgaSentence { .. }));
             assert!(parser.next().is_none());
         }
 
@@ -1156,6 +1173,17 @@ mod tests {
                          4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
                          $GPVTG,182.46,T,,M,0.00,N,0.00";
             let mut parser = t_parser(input);
+            assert_matches!(parser.next(), Some(Err(_)));
+            assert_matches!(parser.next(), Some(Err(_)));
+            assert!(parser.next().is_none());
+        }
+
+        #[test]
+        fn filter_gga_without_gga() {
+            let input = "iCGRA�B؇=&J]���b����?$GPRMC,142132.000,A,\
+                         4900.7350,N,00825.5269,E,0.00,182.46,150518,,,A*63\n\n\
+                         $GPVTG,182.46,T,,M,0.00,N,0.00";
+            let mut parser = t_parser(input).filter_map(|v| v.ok());
             assert!(parser.next().is_none());
         }
     }
