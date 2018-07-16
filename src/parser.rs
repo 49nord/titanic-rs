@@ -368,13 +368,11 @@ impl<R: io::Read> iter::Iterator for GgaParser<R> {
     type Item = Result<GgaSentence, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let _ = self.jump_to_header()?;
-            match self.read_sentence() {
-                Ok(gga) => return Some(Ok(gga)),
-                Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => return None,
-                Err(e) => return Some(Err(e)),
-            }
+        let _ = self.jump_to_header()?;
+        match self.read_sentence() {
+            Ok(gga) => Some(Ok(gga)),
+            Err(ParseError::Lexer(LexError::UnexpectedEof(_))) => None,
+            Err(e) => Some(Err(e)),
         }
     }
 }
