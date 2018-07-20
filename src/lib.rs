@@ -48,6 +48,7 @@
 //! // Prints "Time: 14:22:12, we are here: -19.94903°, -69.633605°"
 //! ```
 //!
+#![forbid(unsafe_code)]
 
 #[cfg(test)]
 #[macro_use]
