@@ -8,7 +8,7 @@ license = "MIT"
 readme = "README.md"
 keywords = ["nmea", "0183", "gps", "parser", "nmea0183"]
 exclude = ["fuzz/*"]
-maintanance = { status = "passively-maintained"}
+maintanance = { status = "passively-maintained" }
 
 [dependencies]
 quick-error = "1.2.2"

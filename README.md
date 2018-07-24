@@ -24,10 +24,15 @@ extern crate nmea_gps;
 
 [`GgaParser`](./parser/struct.GgaParser.html) can be used like an
 [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html).
-Calling `next()` on `GgaParser` **blocks** until it finds `'$'`,
-reaches EOF or an I/O error occurs. `'$'` signals the beginning of a new sentence.
-If the new sentence is of the type GGA, it will be parsed if possible.
-The parser iterates over `Result<GgaSentence, ParseError>`.
+Calling `next` on `GgaParser` **blocks** until
+
+- it finds `'$'`,
+- reaches EOF
+- or an I/O error occurs.
+
+`'$'` signals the beginning of a new sentence. If the new sentence is of the
+type GGA, it will be parsed if possible. The parser iterates over
+`Result<GgaSentence, ParseError>`.
 
 EOF signals the end of the iterator.
 
