@@ -3,7 +3,6 @@
 This is a parser for the GGA sentence of the NMEA 0183 protocol.
 
 More sentences may be added in the future, but are *not planned* at the moment.
-
 Accepts data as described [here](http://www.catb.org/gpsd/NMEA.html#_gga_global_positioning_system_fix_data).
 
 ## Setup
