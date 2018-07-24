@@ -2,7 +2,12 @@
 name = "nmea_gps"
 version = "0.1.0"
 authors = ["Carl Scherer <carl.scherer@49nord.de>"]
-description = "Parses the GGA sentence of the NMEA 0183 protocol."
+description = "Parser for the GGA sentence of the NMEA 0183 protocol."
+repository = "https://github.com/49nord/nmea-gps"
+license = "MIT"
+readme = "README.md"
+keywords = ["nmea", "0183", "gps", "parser", "nmea0183"]
+exclude = ["fuzz/*"]
 
 [dependencies]
 quick-error = "1.2.2"
