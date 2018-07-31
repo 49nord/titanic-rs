@@ -7,7 +7,7 @@ Accepts data as described [here](http://www.catb.org/gpsd/NMEA.html#_gga_global_
 
 ## Setup
 
-Put this to your `Cargo.toml`:
+Add this to `Cargo.toml`:
 
 ```toml
 [dependencies]

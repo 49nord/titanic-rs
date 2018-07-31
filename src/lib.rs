@@ -5,7 +5,7 @@
 //!
 //! # Setup
 //!
-//! Put this to your `Cargo.toml`:
+//! Add this to `Cargo.toml`:
 //! ```toml
 //! [dependencies]
 //! nmea_gps = "0.1.0"
