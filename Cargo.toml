@@ -2,7 +2,7 @@
 name = "titanic"
 version = "0.1.0"
 authors = ["49nord GmbH <hello@49nord.de>", "Carl Scherer <carl.scherer@49nord.de>"]
-description = "Parser for the GGA sentence of the NMEA 0183 protocol."
+description = "Unsinkable parser for the GGA sentence of the NMEA 0183 protocol (parses GPS positions)."
 repository = "https://github.com/49nord/titanic-rs"
 license = "MIT"
 readme = "README.md"
