@@ -11,13 +11,13 @@ Add this to `Cargo.toml`:
 
 ```toml
 [dependencies]
-nmea_gps = "0.1.0"
+titanic = "0.1.0"
 ```
 
 Then put this in your crate root:
 
 ```rust
-extern crate nmea_gps;
+extern crate titanic;
 ```
 
 ## Usage
@@ -37,9 +37,9 @@ type GGA, it will be parsed if possible. The parser iterates over
 EOF signals the end of the iterator.
 
 ```rust
-# extern crate nmea_gps;
+# extern crate titanic;
 # use std::io::Cursor;
-use nmea_gps::GgaParser;
+use titanic::GgaParser;
 
 let data = Cursor::new("$GPGGA,142212.000,1956.9418,S,06938.0163,W,1,3,5.74,102.1,M,47.9,M,,*57");
 let parser = GgaParser::new(data).unwrap();
