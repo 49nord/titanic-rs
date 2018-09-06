@@ -28,7 +28,7 @@ Calling `next` on `GgaParser` **blocks** until
 
 - it finds `'$'`,
 - reaches EOF
-- or an I/O error occurs.
+- an I/O error occurs.
 
 `'$'` signals the beginning of a new sentence. If the new sentence is of the
 type GGA, it will be parsed if possible. The parser iterates over
